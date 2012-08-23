@@ -20,7 +20,8 @@ CHECK_PROGS = \
 	uri-test \
 	pin-test \
 	test-init \
-	test-modules
+	test-modules \
+	test-buffer
 
 noinst_PROGRAMS = \
 	print-messages \
@@ -37,6 +38,7 @@ test_init_SOURCES = test-init.c $(cutestfiles) \
 	mock-module.c mock-module.h
 test_init_CFLAGS = $(AM_CFLAGS)
 test_modules_SOURCES = test-modules.c $(cutestfiles)
+test_buffer_SOURCES = test-buffer.c $(cutestfiles)
 
 uri_test_SOURCES = uri-test.c $(cutestfiles)
 

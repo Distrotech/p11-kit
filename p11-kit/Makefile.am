@@ -15,7 +15,7 @@ inc_HEADERS = \
 	pkcs11.h
 
 MODULE_SRCS = \
-	util.c util.h \
+	buffer.c buffer.h \
 	conf.c conf.h \
 	debug.c debug.h \
 	hashmap.c hashmap.h \
@@ -26,6 +26,7 @@ MODULE_SRCS = \
 	ptr-array.c ptr-array.h \
 	messages.c \
 	uri.c \
+	util.c util.h \
 	$(top_srcdir)/common/compat.c \
 	$(top_srcdir)/common/compat.h \
 	$(inc_HEADERS)

@@ -80,6 +80,14 @@ p11_kit_uri_type_t
 </SECTION>
 
 <SECTION>
+<FILE>p11-kit-buffer</FILE>
+P11Buffer
+p11_buffer_free
+p11_buffer_new
+p11_buffer_reset
+</SECTION>
+
+<SECTION>
 <FILE>p11-kit-future</FILE>
 p11_kit_set_progname
 p11_kit_be_quiet
