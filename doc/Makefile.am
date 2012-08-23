@@ -51,6 +51,9 @@ IGNORE_HFILES= \
 	pkcs11.h \
 	private.h \
 	ptr-array.h \
+	rpc-client.h \
+	rpc-message.h \
+	rpc-server.h \
 	util.h
 
 # Images to copy into HTML directory.

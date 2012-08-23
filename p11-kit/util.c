@@ -199,6 +199,14 @@ p11_kit_be_quiet (void)
 	_p11_unlock ();
 }
 
+void
+_p11_kit_be_loud (void)
+{
+	_p11_lock ();
+	print_messages = 1;
+	_p11_unlock ();
+}
+
 /**
  * p11_kit_message:
  *

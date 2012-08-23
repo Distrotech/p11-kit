@@ -55,6 +55,7 @@ static struct DebugKey debug_keys[] = {
 	{ "conf", DEBUG_CONF },
 	{ "uri", DEBUG_URI },
 	{ "proxy", DEBUG_PROXY },
+	{ "rpc", DEBUG_RPC },
 	{ 0, }
 };
 

@@ -38,15 +38,21 @@
 #include "pkcs11.h"
 #include "mock-module.h"
 
+#include "p11-kit/debug.h"
+#include "p11-kit/hashmap.h"
+#include "p11-kit/ptr-array.h"
 #include "p11-kit/util.h"
 
+#include <assert.h>
+#include <ctype.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
 /* -------------------------------------------------------------------
- * GLOBALS / DEFINES
+ * GLOBALS and SUPPORT STUFF
  */
 
 /* Various mutexes */
@@ -56,32 +62,262 @@ static mutex_t init_mutex;
 static int pkcs11_initialized = 0;
 static pid_t pkcs11_initialized_pid = 0;
 
-/* -----------------------------------------------------------------------------
- * LOGGING and DEBUGGING
- */
+static CK_UTF8CHAR *the_pin = NULL;
+static CK_ULONG n_the_pin = 0;
 
-#define DEBUG_OUTPUT 0
+static int logged_in = 0;
+static CK_USER_TYPE the_user_type = 0;
 
-#if DEBUG_OUTPUT
-#define debug(x) mock_log x
-#else
-#define debug(x)
-#endif
+typedef struct _Session {
+	CK_SESSION_HANDLE handle;
+	hashmap *objects;
+	CK_SESSION_INFO info;
 
-#define warning(x) mock_log x
+	/* For find operations */
+	CK_BBOOL finding;
+	ptr_array_t *matches;
 
-#define return_val_if_fail(x, v) \
-	if (!(x)) { mock_log ("'%s' not true at %s", #x, __func__); return v; }
+	CK_BBOOL want_context_login;
+
+	/* For encrypt, decrypt operations */
+	CK_OBJECT_HANDLE crypto_key;
+	CK_ATTRIBUTE_TYPE crypto_method;
+	CK_MECHANISM_TYPE crypto_mechanism;
+
+	/* For sign, verify, digest, CKM_MOCK_COUNT */
+	CK_MECHANISM_TYPE hash_mechanism;
+	CK_ATTRIBUTE_TYPE hash_method;
+	CK_OBJECT_HANDLE hash_key;
+	CK_ULONG hash_count;
+
+	/* For 'signing' with CKM_MOCK_PREFIX */
+	CK_BYTE sign_prefix[128];
+	CK_ULONG n_sign_prefix;
+
+	/* The random seed */
+	CK_BYTE random_seed[128];
+	CK_ULONG random_seed_len;
+} Session;
+
+static unsigned int unique_identifier = 100;
+static hashmap *the_sessions = NULL;
+static hashmap *the_objects = NULL;
+
+#define SIGNED_PREFIX "signed-prefix:"
+
+#define handle_to_pointer(handle) \
+	((void *)(size_t)(handle))
+
+#define pointer_to_handle(pointer) \
+	((CK_ULONG)(size_t)(pointer))
 
 static void
-mock_log (const char *format, ...)
+free_session (void *data)
 {
-	va_list va;
-	va_start (va, format);
-	fprintf (stderr, "mock-module: ");
-	vfprintf (stderr, format, va);
-	fprintf (stderr, "\n");
-	va_end (va);
+	Session *sess = (Session *)data;
+	if (sess)
+		_p11_hash_free (sess->objects);
+	free (sess);
+}
+
+static void *
+memdup (void *data,
+        size_t length)
+{
+	void *copy = malloc (length);
+	return_val_if_fail (copy != NULL, NULL);
+	memcpy (copy, data, length);
+	return copy;
+}
+
+static int
+is_attribute_terminator (CK_ATTRIBUTE_PTR attr)
+{
+	return (attr->type == 0 &&
+	        attr->pValue == NULL &&
+	        attr->ulValueLen == 0);
+}
+
+static CK_ULONG
+count_attributes (CK_ATTRIBUTE_PTR attrs)
+{
+	CK_ULONG count;
+
+	for (count = 0; attrs && !is_attribute_terminator (attrs + count); count++);
+
+	return count;
+}
+
+static void
+free_attributes (void *data)
+{
+	CK_ATTRIBUTE_PTR attrs = data;
+	int i;
+
+	for (i = 0; !is_attribute_terminator (attrs + i); i++)
+		free (attrs[i].pValue);
+	free (attrs);
+}
+
+static CK_ATTRIBUTE_PTR
+dup_attributes (CK_ATTRIBUTE_PTR attrs)
+{
+	CK_ATTRIBUTE_PTR copy;
+	CK_ULONG count;
+	CK_ULONG i;
+
+	/* How many attributes we already have */
+	count = count_attributes (attrs);
+
+	copy = memdup (attrs, (count + 1) * sizeof (CK_ATTRIBUTE));
+	return_val_if_fail (copy != NULL, NULL);
+	for (i = 0; i < count; i++) {
+		if (copy[i].pValue)
+			copy[i].pValue = memdup (copy[i].pValue, copy[i].ulValueLen);
+	}
+
+	return copy;
+}
+
+static CK_ATTRIBUTE_PTR
+build_attributes (CK_ATTRIBUTE_PTR attrs,
+                  CK_ATTRIBUTE_PTR add,
+                  CK_ULONG n_add)
+{
+	CK_ATTRIBUTE_PTR attr;
+	CK_ULONG count;
+	CK_ULONG at;
+	CK_ULONG i, j;
+
+	/* How many attributes we already have */
+	count = count_attributes (attrs);
+
+	/* Reallocate for how many we need */
+	attrs = realloc (attrs, (count + n_add + 1) * sizeof (CK_ATTRIBUTE));
+	return_val_if_fail (attrs != NULL, NULL);
+
+	at = count;
+	for (i = 0; i < n_add; i++) {
+		attr = NULL;
+
+		/* Do we have this attribute? */
+		for (j = 0; attr == NULL && j < count; j++) {
+			if (attrs[j].type == add[i].type) {
+				attr = attrs + j;
+				free (attrs[j].pValue);
+				break;
+			}
+		}
+
+		if (attr == NULL) {
+			attr = attrs + at;
+			at++;
+		}
+
+		memcpy (attr, add + i, sizeof (CK_ATTRIBUTE));
+		if (attr->pValue)
+			attr->pValue = memdup (attr->pValue, attr->ulValueLen);
+	}
+
+	memset (attrs + at, 0, sizeof (CK_ATTRIBUTE));
+	assert (is_attribute_terminator (attrs + at));
+	return attrs;
+}
+
+static CK_ATTRIBUTE_PTR
+find_attribute (CK_ATTRIBUTE_PTR attrs,
+                CK_ATTRIBUTE_TYPE type)
+{
+	CK_ULONG i;
+
+	for (i = 0; !is_attribute_terminator (attrs + i); i++) {
+		if (attrs[i].type == type)
+			return attrs + i;
+	}
+
+	return NULL;
+}
+
+static int
+find_boolean_attribute (CK_ATTRIBUTE_PTR attrs,
+                        CK_ATTRIBUTE_TYPE type,
+                        CK_BBOOL *value)
+{
+	CK_ULONG i;
+
+	for (i = 0; !is_attribute_terminator (attrs + i); i++) {
+		if (attrs[i].type == type &&
+		    attrs[i].pValue != NULL &&
+		    attrs[i].ulValueLen == sizeof (CK_BBOOL)) {
+			*value = *((CK_BBOOL *)attrs[i].pValue);
+			return 1;
+		}
+	}
+
+	return 0;
+}
+
+static CK_RV
+lookup_object (Session *sess,
+               CK_OBJECT_HANDLE object,
+               CK_ATTRIBUTE_PTR *attrs,
+               hashmap **table)
+{
+	CK_BBOOL priv;
+
+	*attrs = _p11_hash_get (the_objects, handle_to_pointer (object));
+	if (*attrs) {
+		if (table)
+			*table = the_objects;
+	} else {
+		*attrs = _p11_hash_get (sess->objects, handle_to_pointer (object));
+		if (*attrs) {
+			if (table)
+				*table = sess->objects;
+		}
+	}
+
+	if (!*attrs)
+		return CKR_OBJECT_HANDLE_INVALID;
+	else if (!logged_in && find_boolean_attribute (*attrs, CKA_PRIVATE, &priv) && priv)
+		return CKR_USER_NOT_LOGGED_IN;
+
+	return CKR_OK;
+}
+
+void
+mock_module_enumerate_objects (CK_SESSION_HANDLE handle,
+                               MockEnumerator func,
+                               void *user_data)
+{
+	hashiter iter;
+	void *key;
+	void *value;
+	Session *sess;
+
+	assert (the_objects != NULL);
+	assert (func != NULL);
+
+	/* Token objects */
+	_p11_hash_iterate (the_objects, &iter);
+	while (_p11_hash_next (&iter, &key, &value)) {
+		if (!(func) (pointer_to_handle (key), value,
+				count_attributes (value), user_data))
+			return;
+	}
+
+	/* session objects */
+	if (handle) {
+		sess = _p11_hash_get (the_sessions, handle_to_pointer (handle));
+		if (sess) {
+			_p11_hash_iterate (sess->objects, &iter);
+			while (_p11_hash_next (&iter, &key, &value)) {
+				if (!(func) (pointer_to_handle (key), value,
+						count_attributes (value), user_data))
+					return;
+			}
+		}
+	}
 }
 
 /* -------------------------------------------------------------------
@@ -94,8 +330,6 @@ mock_C_Initialize (CK_VOID_PTR init_args)
 	CK_C_INITIALIZE_ARGS_PTR args = NULL;
 	CK_RV ret = CKR_OK;
 	pid_t pid;
-
-	debug (("C_Initialize: enter"));
 
 	_p11_mutex_lock (&init_mutex);
 
@@ -111,7 +345,7 @@ mock_C_Initialize (CK_VOID_PTR init_args)
 			              (args->CreateMutex != NULL && args->DestroyMutex != NULL &&
 			               args->LockMutex != NULL && args->UnlockMutex != NULL);
 			if (!supplied_ok) {
-				warning (("invalid set of mutex calls supplied"));
+				_p11_debug_precond ("p11-kit: invalid set of mutex calls supplied");
 				ret = CKR_ARGUMENTS_BAD;
 				goto done;
 			}
@@ -121,7 +355,7 @@ mock_C_Initialize (CK_VOID_PTR init_args)
 			 * We must be able to use our pthread functionality.
 			 */
 			if (!(args->flags & CKF_OS_LOCKING_OK)) {
-				warning (("can't do without os locking"));
+				_p11_debug_precond ("p11-kit: can't do without os locking");
 				ret = CKR_CANT_LOCK;
 				goto done;
 			}
@@ -132,10 +366,119 @@ mock_C_Initialize (CK_VOID_PTR init_args)
 
 			/* This process has called C_Initialize already */
 			if (pid == pkcs11_initialized_pid) {
-				warning (("C_Initialize called twice for same process"));
+				_p11_debug_precond ("p11-kit: C_Initialize called twice for same process");
 				ret = CKR_CRYPTOKI_ALREADY_INITIALIZED;
 				goto done;
 			}
+		}
+
+		/* We store CK_ULONG as pointers here, so verify that they fit */
+		assert (sizeof (CK_ULONG) <= sizeof (void *));
+
+		the_pin = (CK_UTF8CHAR_PTR)strdup ("booo");
+		n_the_pin = 4;
+
+		the_sessions = _p11_hash_create (_p11_hash_direct_hash,
+		                                 _p11_hash_direct_equal,
+		                                 NULL, free_session);
+		the_objects = _p11_hash_create (_p11_hash_direct_hash,
+		                                _p11_hash_direct_equal,
+		                                NULL, free_attributes);
+
+		/* Our token object */
+		{
+			CK_OBJECT_CLASS klass = CKO_DATA;
+			char *label = "TEST LABEL";
+			CK_ATTRIBUTE attrs[] = {
+				{ CKA_CLASS, &klass, sizeof (klass) },
+				{ CKA_LABEL, label, strlen (label) },
+				{ 0, NULL, 0 },
+			};
+			_p11_hash_set (the_objects, handle_to_pointer (2), dup_attributes (attrs));
+		}
+
+		/* Private capitalize key */
+		{
+			CK_OBJECT_CLASS klass = CKO_PRIVATE_KEY;
+			char *label = "Private Capitalize Key";
+			char *value = "value";
+			CK_MECHANISM_TYPE type = CKM_MOCK_CAPITALIZE;
+			CK_BBOOL btrue = CK_TRUE;
+			CK_ATTRIBUTE attrs[] = {
+				{ CKA_CLASS, &klass, sizeof (klass) },
+				{ CKA_LABEL, label, strlen (label) },
+				{ CKA_ALLOWED_MECHANISMS, &type, sizeof (type) },
+				{ CKA_DECRYPT, &btrue, sizeof (btrue) },
+				{ CKA_PRIVATE, &btrue, sizeof (btrue) },
+				{ CKA_WRAP, &btrue, sizeof (btrue) },
+				{ CKA_UNWRAP, &btrue, sizeof (btrue) },
+				{ CKA_DERIVE, &btrue, sizeof (btrue) },
+				{ CKA_VALUE, value, strlen (value) },
+				{ 0, NULL, 0 },
+			};
+			_p11_hash_set (the_objects, handle_to_pointer (MOCK_PRIVATE_KEY_CAPITALIZE), dup_attributes (attrs));
+
+		}
+
+		{
+			CK_OBJECT_CLASS klass = CKO_PUBLIC_KEY;
+			char *label = "Public Capitalize Key";
+			char *value = "value";
+			CK_MECHANISM_TYPE type = CKM_MOCK_CAPITALIZE;
+			CK_BBOOL btrue = CK_TRUE;
+			CK_BBOOL bfalse = CK_FALSE;
+			CK_ATTRIBUTE attrs[] = {
+				{ CKA_CLASS, &klass, sizeof (klass) },
+				{ CKA_LABEL, label, strlen (label) },
+				{ CKA_ALLOWED_MECHANISMS, &type, sizeof (type) },
+				{ CKA_ENCRYPT, &btrue, sizeof (btrue) },
+				{ CKA_PRIVATE, &bfalse, sizeof (bfalse) },
+				{ CKA_VALUE, value, strlen (value) },
+				{ 0, NULL, 0 },
+			};
+			_p11_hash_set (the_objects, handle_to_pointer (MOCK_PUBLIC_KEY_CAPITALIZE), dup_attributes (attrs));
+
+		}
+
+		{
+			CK_OBJECT_CLASS klass = CKO_PRIVATE_KEY;
+			char *label = "Private prefix key";
+			char *value = "value";
+			CK_MECHANISM_TYPE type = CKM_MOCK_PREFIX;
+			CK_BBOOL btrue = CK_TRUE;
+			CK_ATTRIBUTE attrs[] = {
+				{ CKA_CLASS, &klass, sizeof (klass) },
+				{ CKA_LABEL, label, strlen (label) },
+				{ CKA_ALLOWED_MECHANISMS, &type, sizeof (type) },
+				{ CKA_SIGN, &btrue, sizeof (btrue) },
+				{ CKA_PRIVATE, &btrue, sizeof (btrue) },
+				{ CKA_ALWAYS_AUTHENTICATE, &btrue, sizeof (btrue) },
+				{ CKA_VALUE, value, strlen (value) },
+				{ 0, NULL, 0 },
+			};
+			_p11_hash_set (the_objects, handle_to_pointer (MOCK_PRIVATE_KEY_PREFIX), dup_attributes (attrs));
+
+		}
+
+		{
+			CK_OBJECT_CLASS klass = CKO_PUBLIC_KEY;
+			char *label = "Public prefix key";
+			char *value = "value";
+			CK_MECHANISM_TYPE type = CKM_MOCK_PREFIX;
+			CK_BBOOL btrue = CK_TRUE;
+			CK_BBOOL bfalse = CK_FALSE;
+			CK_ATTRIBUTE attrs[] = {
+				{ CKA_CLASS, &klass, sizeof (klass) },
+				{ CKA_LABEL, label, strlen (label) },
+				{ CKA_ALLOWED_MECHANISMS, &type, sizeof (type) },
+				{ CKA_VERIFY, &btrue, sizeof (btrue) },
+				{ CKA_PRIVATE, &bfalse, sizeof (bfalse) },
+				{ CKA_ALWAYS_AUTHENTICATE, &btrue, sizeof (btrue) },
+				{ CKA_VALUE, value, strlen (value) },
+				{ 0, NULL, 0 },
+			};
+			_p11_hash_set (the_objects, handle_to_pointer (MOCK_PUBLIC_KEY_PREFIX), dup_attributes (attrs));
+
 		}
 
 done:
@@ -150,14 +493,18 @@ done:
 
 	_p11_mutex_unlock (&init_mutex);
 
-	debug (("C_Initialize: %d", ret));
 	return ret;
+}
+
+CK_RV
+mock_C_Initialize__fails (CK_VOID_PTR init_args)
+{
+	return CKR_FUNCTION_FAILED;
 }
 
 CK_RV
 mock_C_Finalize (CK_VOID_PTR reserved)
 {
-	debug (("C_Finalize: enter"));
 	return_val_if_fail (pkcs11_initialized != 0, CKR_CRYPTOKI_NOT_INITIALIZED);
 	return_val_if_fail (reserved == NULL, CKR_ARGUMENTS_BAD);
 
@@ -167,17 +514,26 @@ mock_C_Finalize (CK_VOID_PTR reserved)
 		pkcs11_initialized = 0;
 		pkcs11_initialized_pid = 0;
 
+		_p11_hash_free (the_objects);
+		the_objects = NULL;
+
+		_p11_hash_free (the_sessions);
+		the_sessions = NULL;
+		logged_in = 0;
+		the_user_type = 0;
+
+		free (the_pin);
+
 	_p11_mutex_unlock (&init_mutex);
 
-	debug (("C_Finalize: %d", CKR_OK));
 	return CKR_OK;
 }
 
 static const CK_INFO MOCK_INFO = {
 	{ CRYPTOKI_VERSION_MAJOR, CRYPTOKI_VERSION_MINOR },
-	"MOCK MANUFACTURER              ",
+	"MOCK MANUFACTURER               ",
 	0,
-	"MOCK LIBRARY                   ",
+	"MOCK LIBRARY                    ",
 	{ 45, 145 }
 };
 
@@ -199,6 +555,35 @@ mock_C_GetFunctionList (CK_FUNCTION_LIST_PTR_PTR list)
 }
 
 CK_RV
+mock_C_GetSlotList (CK_BBOOL token_present,
+                    CK_SLOT_ID_PTR slot_list,
+                    CK_ULONG_PTR count)
+{
+	CK_ULONG num;
+
+	return_val_if_fail (count, CKR_ARGUMENTS_BAD);
+
+	num = token_present ? 1 : 2;
+
+	/* Application only wants to know the number of slots. */
+	if (slot_list == NULL) {
+		*count = num;
+		return CKR_OK;
+	}
+
+	if (*count < num)
+		return_val_if_reached (CKR_BUFFER_TOO_SMALL);
+
+	*count = num;
+	slot_list[0] = MOCK_SLOT_ONE_ID;
+	if (!token_present)
+		slot_list[1] = MOCK_SLOT_TWO_ID;
+
+	return CKR_OK;
+
+}
+
+CK_RV
 mock_C_GetSlotList__no_tokens (CK_BBOOL token_present,
                                CK_SLOT_ID_PTR slot_list,
                                CK_ULONG_PTR count)
@@ -210,8 +595,45 @@ mock_C_GetSlotList__no_tokens (CK_BBOOL token_present,
 	return CKR_OK;
 }
 
+/* Update mock-module.h URIs when updating this */
+
+static const CK_SLOT_INFO MOCK_INFO_ONE = {
+	"TEST SLOT                                                       ",
+	"TEST MANUFACTURER               ",
+	CKF_TOKEN_PRESENT | CKF_REMOVABLE_DEVICE,
+	{ 55, 155 },
+	{ 65, 165 },
+};
+
+/* Update mock-module.h URIs when updating this */
+
+static const CK_SLOT_INFO MOCK_INFO_TWO = {
+	"TEST SLOT                                                       ",
+	"TEST MANUFACTURER               ",
+	CKF_REMOVABLE_DEVICE,
+	{ 55, 155 },
+	{ 65, 165 },
+};
+
 CK_RV
-mock_C_GetSlotInfo__invalid_slotid (CK_SLOT_ID id,
+mock_C_GetSlotInfo (CK_SLOT_ID slot_id,
+                    CK_SLOT_INFO_PTR info)
+{
+	return_val_if_fail (info, CKR_ARGUMENTS_BAD);
+
+	if (slot_id == MOCK_SLOT_ONE_ID) {
+		memcpy (info, &MOCK_INFO_ONE, sizeof (*info));
+		return CKR_OK;
+	} else if (slot_id == MOCK_SLOT_TWO_ID) {
+		memcpy (info, &MOCK_INFO_TWO, sizeof (*info));
+		return CKR_OK;
+	} else {
+		return CKR_SLOT_ID_INVALID;
+	}
+}
+
+CK_RV
+mock_C_GetSlotInfo__invalid_slotid (CK_SLOT_ID slot_id,
                                     CK_SLOT_INFO_PTR info)
 {
 	return_val_if_fail (info, CKR_ARGUMENTS_BAD);
@@ -219,8 +641,47 @@ mock_C_GetSlotInfo__invalid_slotid (CK_SLOT_ID id,
 	return CKR_SLOT_ID_INVALID;
 }
 
+/* Update gck-mock.h URIs when updating this */
+
+static const CK_TOKEN_INFO MOCK_TOKEN_ONE = {
+	"TEST LABEL                      ",
+	"TEST MANUFACTURER               ",
+	"TEST MODEL      ",
+	"TEST SERIAL     ",
+	CKF_LOGIN_REQUIRED | CKF_USER_PIN_INITIALIZED | CKF_CLOCK_ON_TOKEN | CKF_TOKEN_INITIALIZED,
+	1,
+	2,
+	3,
+	4,
+	5,
+	6,
+	7,
+	8,
+	9,
+	10,
+	{ 75, 175 },
+	{ 85, 185 },
+	{ '1', '9', '9', '9', '0', '5', '2', '5', '0', '9', '1', '9', '5', '9', '0', '0' }
+};
+
 CK_RV
-mock_C_GetTokenInfo__invalid_slotid (CK_SLOT_ID id,
+mock_C_GetTokenInfo (CK_SLOT_ID slot_id,
+                     CK_TOKEN_INFO_PTR info)
+{
+	return_val_if_fail (info != NULL, CKR_ARGUMENTS_BAD);
+
+	if (slot_id == MOCK_SLOT_ONE_ID) {
+		memcpy (info, &MOCK_TOKEN_ONE, sizeof (*info));
+		return CKR_OK;
+	} else if (slot_id == MOCK_SLOT_TWO_ID) {
+		return CKR_TOKEN_NOT_PRESENT;
+	} else {
+		return CKR_SLOT_ID_INVALID;
+	}
+}
+
+CK_RV
+mock_C_GetTokenInfo__invalid_slotid (CK_SLOT_ID slot_id,
                                      CK_TOKEN_INFO_PTR info)
 {
 	return_val_if_fail (info, CKR_ARGUMENTS_BAD);
@@ -228,8 +689,41 @@ mock_C_GetTokenInfo__invalid_slotid (CK_SLOT_ID id,
 	return CKR_SLOT_ID_INVALID;
 }
 
+/*
+ * TWO mechanisms:
+ *  CKM_MOCK_CAPITALIZE
+ *  CKM_MOCK_PREFIX
+ */
+
 CK_RV
-mock_C_GetMechanismList__invalid_slotid (CK_SLOT_ID id,
+mock_C_GetMechanismList (CK_SLOT_ID slot_id,
+                         CK_MECHANISM_TYPE_PTR mechanism_list,
+                         CK_ULONG_PTR count)
+{
+	return_val_if_fail (count != NULL, CKR_ARGUMENTS_BAD);
+
+	if (slot_id == MOCK_SLOT_TWO_ID)
+		return CKR_TOKEN_NOT_PRESENT;
+	else if (slot_id != MOCK_SLOT_ONE_ID)
+		return CKR_SLOT_ID_INVALID;
+
+	/* Application only wants to know the number of slots. */
+	if (mechanism_list == NULL) {
+		*count = 2;
+		return CKR_OK;
+	}
+
+	if (*count < 2)
+		return_val_if_reached (CKR_BUFFER_TOO_SMALL);
+
+	mechanism_list[0] = CKM_MOCK_CAPITALIZE;
+	mechanism_list[1] = CKM_MOCK_PREFIX;
+	*count = 2;
+	return CKR_OK;
+}
+
+CK_RV
+mock_C_GetMechanismList__invalid_slotid (CK_SLOT_ID slot_id,
                                          CK_MECHANISM_TYPE_PTR mechanism_list,
                                          CK_ULONG_PTR count)
 {
@@ -238,8 +732,39 @@ mock_C_GetMechanismList__invalid_slotid (CK_SLOT_ID id,
 	return CKR_SLOT_ID_INVALID;
 }
 
+static const CK_MECHANISM_INFO MOCK_MECH_CAPITALIZE = {
+	512, 4096, CKF_ENCRYPT | CKF_DECRYPT
+};
+
+static const CK_MECHANISM_INFO MOCK_MECH_PREFIX = {
+	2048, 2048, CKF_SIGN | CKF_VERIFY
+};
+
 CK_RV
-mock_C_GetMechanismInfo__invalid_slotid (CK_SLOT_ID id,
+mock_C_GetMechanismInfo (CK_SLOT_ID slot_id,
+                         CK_MECHANISM_TYPE type,
+                         CK_MECHANISM_INFO_PTR info)
+{
+	return_val_if_fail (info, CKR_ARGUMENTS_BAD);
+
+	if (slot_id == MOCK_SLOT_TWO_ID)
+		return CKR_TOKEN_NOT_PRESENT;
+	else if (slot_id != MOCK_SLOT_ONE_ID)
+		return CKR_SLOT_ID_INVALID;
+
+	if (type == CKM_MOCK_CAPITALIZE) {
+		memcpy (info, &MOCK_MECH_CAPITALIZE, sizeof (*info));
+		return CKR_OK;
+	} else if (type == CKM_MOCK_PREFIX) {
+		memcpy (info, &MOCK_MECH_PREFIX, sizeof (*info));
+		return CKR_OK;
+	} else {
+		return CKR_MECHANISM_INVALID;
+	}
+}
+
+CK_RV
+mock_C_GetMechanismInfo__invalid_slotid (CK_SLOT_ID slot_id,
                                          CK_MECHANISM_TYPE type,
                                          CK_MECHANISM_INFO_PTR info)
 {
@@ -249,12 +774,53 @@ mock_C_GetMechanismInfo__invalid_slotid (CK_SLOT_ID id,
 }
 
 CK_RV
-mock_C_InitToken__invalid_slotid (CK_SLOT_ID id,
+mock_C_InitToken__specific_args (CK_SLOT_ID slot_id,
+                                 CK_UTF8CHAR_PTR pin,
+                                 CK_ULONG pin_len,
+                                 CK_UTF8CHAR_PTR label)
+{
+	return_val_if_fail (pin != NULL, CKR_ARGUMENTS_BAD);
+	return_val_if_fail (label != NULL, CKR_ARGUMENTS_BAD);
+
+	if (slot_id == MOCK_SLOT_TWO_ID)
+		return CKR_TOKEN_NOT_PRESENT;
+	else if (slot_id != MOCK_SLOT_ONE_ID)
+		return CKR_SLOT_ID_INVALID;
+
+	if (strlen ("TEST PIN") != pin_len ||
+	    strncmp ((char *)pin, "TEST PIN", pin_len) != 0)
+		return CKR_PIN_INVALID;
+	if (strcmp ((char *)label, "TEST LABEL") != 0)
+		return CKR_ARGUMENTS_BAD;
+
+	free (the_pin);
+	the_pin = memdup (pin, pin_len);
+	return_val_if_fail (the_pin != NULL, CKR_HOST_MEMORY);
+	n_the_pin = pin_len;
+	return CKR_OK;
+}
+
+CK_RV
+mock_C_InitToken__invalid_slotid (CK_SLOT_ID slot_id,
                                   CK_UTF8CHAR_PTR pin,
                                   CK_ULONG pin_len,
                                   CK_UTF8CHAR_PTR label)
 {
 	return CKR_SLOT_ID_INVALID;
+}
+
+CK_RV
+mock_C_WaitForSlotEvent (CK_FLAGS flags,
+                         CK_SLOT_ID_PTR slot,
+                         CK_VOID_PTR reserved)
+{
+	return_val_if_fail (slot, CKR_ARGUMENTS_BAD);
+
+	if (flags & CKF_DONT_BLOCK)
+		return CKR_NO_EVENT;
+
+	*slot = MOCK_SLOT_TWO_ID;
+	return CKR_OK;
 }
 
 CK_RV
@@ -268,7 +834,42 @@ mock_C_WaitForSlotEvent__no_event (CK_FLAGS flags,
 }
 
 CK_RV
-mock_C_OpenSession__invalid_slotid (CK_SLOT_ID id,
+mock_C_OpenSession (CK_SLOT_ID slot_id,
+                    CK_FLAGS flags,
+                    CK_VOID_PTR user_data,
+                    CK_NOTIFY callback,
+                    CK_SESSION_HANDLE_PTR session)
+{
+	Session *sess;
+
+	return_val_if_fail (session, CKR_ARGUMENTS_BAD);
+
+	if (slot_id == MOCK_SLOT_TWO_ID)
+		return CKR_TOKEN_NOT_PRESENT;
+	else if (slot_id != MOCK_SLOT_ONE_ID)
+		return CKR_SLOT_ID_INVALID;
+	if ((flags & CKF_SERIAL_SESSION) != CKF_SERIAL_SESSION)
+		return CKR_SESSION_PARALLEL_NOT_SUPPORTED;
+
+	sess = calloc (1, sizeof (Session));
+	sess->handle = ++unique_identifier;
+	sess->info.flags = flags;
+	sess->info.slotID = slot_id;
+	sess->info.state = 0;
+	sess->info.ulDeviceError = 1414;
+	sess->objects = _p11_hash_create (_p11_hash_direct_hash, _p11_hash_direct_equal,
+	                                  NULL, free_attributes);
+	*session = sess->handle;
+
+	memcpy (sess->random_seed, "random", 6);
+	sess->random_seed_len = 6;
+
+	_p11_hash_set (the_sessions, handle_to_pointer (sess->handle), sess);
+	return CKR_OK;
+}
+
+CK_RV
+mock_C_OpenSession__invalid_slotid (CK_SLOT_ID slot_id,
                                     CK_FLAGS flags,
                                     CK_VOID_PTR user_data,
                                     CK_NOTIFY callback,
@@ -280,15 +881,48 @@ mock_C_OpenSession__invalid_slotid (CK_SLOT_ID id,
 }
 
 CK_RV
+mock_C_CloseSession (CK_SESSION_HANDLE session)
+{
+	Session *sess;
+
+	sess = _p11_hash_get (the_sessions, handle_to_pointer (session));
+	if (!sess)
+		return CKR_SESSION_HANDLE_INVALID;
+
+	_p11_hash_remove (the_sessions, handle_to_pointer (session));
+	return CKR_OK;
+}
+
+CK_RV
 mock_C_CloseSession__invalid_handle (CK_SESSION_HANDLE session)
 {
 	return CKR_SESSION_HANDLE_INVALID;
 }
 
 CK_RV
-mock_C_CloseAllSessions__invalid_slotid (CK_SLOT_ID id)
+mock_C_CloseAllSessions (CK_SLOT_ID slot_id)
+{
+	if (slot_id == MOCK_SLOT_TWO_ID)
+		return CKR_TOKEN_NOT_PRESENT;
+	else if (slot_id != MOCK_SLOT_ONE_ID)
+		return CKR_SLOT_ID_INVALID;
+
+	_p11_hash_clear (the_sessions);
+	return CKR_OK;
+}
+
+CK_RV
+mock_C_CloseAllSessions__invalid_slotid (CK_SLOT_ID slot_id)
 {
 	return CKR_SLOT_ID_INVALID;
+}
+
+CK_RV
+mock_C_GetFunctionStatus (CK_SESSION_HANDLE session)
+{
+	if (!_p11_hash_get (the_sessions, handle_to_pointer (session)))
+		return CKR_SESSION_HANDLE_INVALID;
+	return CKR_FUNCTION_NOT_PARALLEL;
 }
 
 CK_RV
@@ -298,9 +932,45 @@ mock_C_GetFunctionStatus__not_parallel (CK_SESSION_HANDLE session)
 }
 
 CK_RV
+mock_C_CancelFunction (CK_SESSION_HANDLE session)
+{
+	if (!_p11_hash_get (the_sessions, handle_to_pointer (session)))
+		return CKR_SESSION_HANDLE_INVALID;
+	return CKR_FUNCTION_NOT_PARALLEL;
+}
+
+CK_RV
 mock_C_CancelFunction__not_parallel (CK_SESSION_HANDLE session)
 {
 	return CKR_FUNCTION_NOT_PARALLEL;
+}
+
+CK_RV
+mock_C_GetSessionInfo (CK_SESSION_HANDLE session,
+                       CK_SESSION_INFO_PTR info)
+{
+	Session *sess;
+
+	return_val_if_fail (info != NULL, CKR_ARGUMENTS_BAD);
+
+	sess = _p11_hash_get (the_sessions, handle_to_pointer (session));
+	if (!session)
+		return CKR_SESSION_HANDLE_INVALID;
+
+	if (logged_in) {
+		if (sess->info.flags & CKF_RW_SESSION)
+			sess->info.state = CKS_RW_USER_FUNCTIONS;
+		else
+			sess->info.state = CKS_RO_USER_FUNCTIONS;
+	} else {
+		if (sess->info.flags & CKF_RW_SESSION)
+			sess->info.state = CKS_RW_PUBLIC_SESSION;
+		else
+			sess->info.state = CKS_RO_PUBLIC_SESSION;
+	}
+
+	memcpy (info, &sess->info, sizeof (*info));
+	return CKR_OK;
 }
 
 CK_RV
@@ -313,11 +983,62 @@ mock_C_GetSessionInfo__invalid_handle (CK_SESSION_HANDLE session,
 }
 
 CK_RV
+mock_C_InitPIN__specific_args (CK_SESSION_HANDLE session,
+                               CK_UTF8CHAR_PTR pin,
+                               CK_ULONG pin_len)
+{
+	Session *sess;
+
+	sess = _p11_hash_get (the_sessions, handle_to_pointer (session));
+	if (sess == NULL)
+		return CKR_SESSION_HANDLE_INVALID;
+
+	if (strlen ("TEST PIN") != pin_len ||
+	    strncmp ((char *)pin, "TEST PIN", pin_len) != 0)
+		return CKR_PIN_INVALID;
+
+	free (the_pin);
+	the_pin = memdup (pin, pin_len);
+	return_val_if_fail (the_pin != NULL, CKR_HOST_MEMORY);
+	n_the_pin = pin_len;
+	return CKR_OK;
+}
+
+CK_RV
 mock_C_InitPIN__invalid_handle (CK_SESSION_HANDLE session,
                                 CK_UTF8CHAR_PTR pin,
                                 CK_ULONG pin_len)
 {
 	return CKR_SESSION_HANDLE_INVALID;
+}
+
+CK_RV
+mock_C_SetPIN__specific_args (CK_SESSION_HANDLE session,
+                              CK_UTF8CHAR_PTR old_pin,
+                              CK_ULONG old_pin_len,
+                              CK_UTF8CHAR_PTR new_pin,
+                              CK_ULONG new_pin_len)
+{
+	Session *sess;
+
+	sess = _p11_hash_get (the_sessions, handle_to_pointer (session));
+	if (sess == NULL)
+		return CKR_SESSION_HANDLE_INVALID;
+
+	if (old_pin_len != n_the_pin)
+		return CKR_PIN_INCORRECT;
+	if (memcmp (old_pin, the_pin, n_the_pin) != 0)
+		return CKR_PIN_INCORRECT;
+
+	if (strlen ("TEST PIN") != new_pin_len ||
+	    strncmp ((char *)new_pin, "TEST PIN", new_pin_len) != 0)
+		return CKR_PIN_INVALID;
+
+	free (the_pin);
+	the_pin = memdup (new_pin, new_pin_len);
+	return_val_if_fail (the_pin != NULL, CKR_HOST_MEMORY);
+	n_the_pin = new_pin_len;
+	return CKR_OK;
 }
 
 CK_RV
@@ -331,13 +1052,61 @@ mock_C_SetPIN__invalid_handle (CK_SESSION_HANDLE session,
 }
 
 CK_RV
-mock_C_GetOperationState__invalid_handle (CK_SESSION_HANDLE session,
-                                         CK_BYTE_PTR operation_state,
-                                         CK_ULONG_PTR operation_state_len)
+mock_C_GetOperationState (CK_SESSION_HANDLE session,
+                          CK_BYTE_PTR operation_state,
+                          CK_ULONG_PTR operation_state_len)
 {
+	Session *sess;
+
 	return_val_if_fail (operation_state_len, CKR_ARGUMENTS_BAD);
 
-	return CKR_SESSION_HANDLE_INVALID;
+	sess = _p11_hash_get (the_sessions, handle_to_pointer (session));
+	if (sess == NULL)
+		return CKR_SESSION_HANDLE_INVALID;
+
+	if (!operation_state) {
+		*operation_state_len = sizeof (sess);
+		return CKR_OK;
+	}
+
+	if (*operation_state_len < sizeof (sess))
+		return CKR_BUFFER_TOO_SMALL;
+
+	memcpy (operation_state, &sess, sizeof (sess));
+	*operation_state_len = sizeof (sess);
+	return CKR_OK;
+}
+
+CK_RV
+mock_C_GetOperationState__invalid_handle (CK_SESSION_HANDLE session,
+                                          CK_BYTE_PTR operation_state,
+                                          CK_ULONG_PTR operation_state_len)
+{
+	return CKR_FUNCTION_NOT_SUPPORTED;
+}
+
+CK_RV
+mock_C_SetOperationState (CK_SESSION_HANDLE session,
+                          CK_BYTE_PTR operation_state,
+                          CK_ULONG operation_state_len,
+                          CK_OBJECT_HANDLE encryption_key,
+                          CK_OBJECT_HANDLE authentication_key)
+{
+	Session *sess;
+
+	sess = _p11_hash_get (the_sessions, handle_to_pointer (session));
+	if (sess == NULL)
+		return CKR_SESSION_HANDLE_INVALID;
+
+	if (!operation_state || operation_state_len != sizeof (sess))
+		return CKR_ARGUMENTS_BAD;
+
+	/* Yes, just arbitrary numbers, to make sure they got through */
+	if (encryption_key != 355 || authentication_key != 455)
+		return CKR_KEY_HANDLE_INVALID;
+	if (memcmp (operation_state, &sess, sizeof (sess)) != 0)
+		return CKR_SAVED_STATE_INVALID;
+	return CKR_OK;
 }
 
 CK_RV
@@ -351,20 +1120,108 @@ mock_C_SetOperationState__invalid_handle (CK_SESSION_HANDLE session,
 }
 
 CK_RV
+mock_C_Login (CK_SESSION_HANDLE session,
+              CK_USER_TYPE user_type,
+              CK_UTF8CHAR_PTR pin,
+              CK_ULONG pin_len)
+{
+	Session *sess;
+
+	return_val_if_fail (user_type == CKU_SO ||
+	                    user_type == CKU_USER ||
+	                    user_type == CKU_CONTEXT_SPECIFIC,
+	                    CKR_USER_TYPE_INVALID);
+
+	sess = _p11_hash_get (the_sessions, handle_to_pointer (session));
+	if (sess == NULL)
+		return CKR_SESSION_HANDLE_INVALID;
+
+	if (logged_in && user_type != CKU_CONTEXT_SPECIFIC)
+		return CKR_USER_ALREADY_LOGGED_IN;
+
+	if (!pin)
+		return CKR_PIN_INCORRECT;
+
+	if (pin_len != n_the_pin)
+		return CKR_PIN_INCORRECT;
+	if (strncmp ((char *)pin, (char *)the_pin, pin_len) != 0)
+		return CKR_PIN_INCORRECT;
+
+	if (user_type == CKU_CONTEXT_SPECIFIC) {
+		return_val_if_fail (sess->want_context_login == TRUE, CKR_OPERATION_NOT_INITIALIZED);
+		sess->want_context_login = CK_FALSE;
+	} else {
+		logged_in = TRUE;
+		the_user_type = user_type;
+	}
+
+	return CKR_OK;
+}
+
+CK_RV
 mock_C_Login__invalid_handle (CK_SESSION_HANDLE session,
                               CK_USER_TYPE user_type,
                               CK_UTF8CHAR_PTR pin,
                               CK_ULONG pin_len)
 {
 	return CKR_SESSION_HANDLE_INVALID;
+}
 
+CK_RV
+mock_C_Logout (CK_SESSION_HANDLE session)
+{
+	Session *sess;
+
+	sess = _p11_hash_get (the_sessions, handle_to_pointer (session));
+	if (!sess)
+		return CKR_SESSION_HANDLE_INVALID;
+
+	if (!logged_in)
+		return CKR_USER_NOT_LOGGED_IN;
+
+	logged_in = FALSE;
+	the_user_type = 0;
+	return CKR_OK;
 }
 
 CK_RV
 mock_C_Logout__invalid_handle (CK_SESSION_HANDLE session)
 {
 	return CKR_SESSION_HANDLE_INVALID;
+}
 
+CK_RV
+mock_C_CreateObject (CK_SESSION_HANDLE session,
+                     CK_ATTRIBUTE_PTR template,
+                     CK_ULONG count,
+                     CK_OBJECT_HANDLE_PTR object)
+{
+	CK_ATTRIBUTE_PTR attrs;
+	Session *sess;
+	CK_BBOOL token, priv;
+
+	return_val_if_fail (object, CKR_ARGUMENTS_BAD);
+
+	sess = _p11_hash_get (the_sessions, handle_to_pointer (session));
+	if (!sess)
+		return CKR_SESSION_HANDLE_INVALID;
+
+	attrs = build_attributes (NULL, template, count);
+
+	if (find_boolean_attribute (attrs, CKA_PRIVATE, &priv) && priv) {
+		if (!logged_in) {
+			free_attributes (attrs);
+			return CKR_USER_NOT_LOGGED_IN;
+		}
+	}
+
+	*object = ++unique_identifier;
+	if (find_boolean_attribute (attrs, CKA_TOKEN, &token) && token)
+		_p11_hash_set (the_objects, handle_to_pointer (*object), attrs);
+	else
+		_p11_hash_set (sess->objects, handle_to_pointer (*object), attrs);
+
+	return CKR_OK;
 }
 
 CK_RV
@@ -376,6 +1233,46 @@ mock_C_CreateObject__invalid_handle (CK_SESSION_HANDLE session,
 	return_val_if_fail (new_object, CKR_ARGUMENTS_BAD);
 
 	return CKR_SESSION_HANDLE_INVALID;
+}
+
+CK_RV
+mock_C_CopyObject (CK_SESSION_HANDLE session,
+                   CK_OBJECT_HANDLE object,
+                   CK_ATTRIBUTE_PTR template,
+                   CK_ULONG count,
+                   CK_OBJECT_HANDLE_PTR new_object)
+{
+	CK_ATTRIBUTE_PTR attrs;
+	Session *sess;
+	CK_BBOOL token, priv;
+	CK_RV rv;
+
+	return_val_if_fail (object, CKR_ARGUMENTS_BAD);
+
+	sess = _p11_hash_get (the_sessions, handle_to_pointer (session));
+	if (!sess)
+		return CKR_SESSION_HANDLE_INVALID;
+
+	rv = lookup_object (sess, object, &attrs, NULL);
+	if (rv != CKR_OK)
+		return rv;
+
+	if (find_boolean_attribute (attrs, CKA_PRIVATE, &priv) && priv) {
+		if (!logged_in) {
+			free_attributes (attrs);
+			return CKR_USER_NOT_LOGGED_IN;
+		}
+	}
+
+	attrs = build_attributes (dup_attributes (attrs), template, count);
+
+	*new_object = ++unique_identifier;
+	if (find_boolean_attribute (attrs, CKA_TOKEN, &token) && token)
+		_p11_hash_set (the_objects, handle_to_pointer (*new_object), attrs);
+	else
+		_p11_hash_set (sess->objects, handle_to_pointer (*new_object), attrs);
+
+	return CKR_OK;
 }
 
 CK_RV
@@ -392,10 +1289,60 @@ mock_C_CopyObject__invalid_handle (CK_SESSION_HANDLE session,
 
 
 CK_RV
+mock_C_DestroyObject (CK_SESSION_HANDLE session,
+                      CK_OBJECT_HANDLE object)
+{
+	CK_ATTRIBUTE_PTR attrs;
+	Session *sess;
+	hashmap *table;
+	CK_RV rv;
+
+	sess = _p11_hash_get (the_sessions, handle_to_pointer (session));
+	if (!sess)
+		return CKR_SESSION_HANDLE_INVALID;
+
+	rv = lookup_object (sess, object, &attrs, &table);
+	if (rv != CKR_OK)
+		return rv;
+
+	_p11_hash_remove (table, handle_to_pointer (object));
+	return CKR_OK;
+}
+
+CK_RV
 mock_C_DestroyObject__invalid_handle (CK_SESSION_HANDLE session,
                                       CK_OBJECT_HANDLE object)
 {
 	return CKR_SESSION_HANDLE_INVALID;
+}
+
+CK_RV
+mock_C_GetObjectSize (CK_SESSION_HANDLE session,
+                      CK_OBJECT_HANDLE object,
+                      CK_ULONG_PTR size)
+{
+	CK_ATTRIBUTE_PTR attrs;
+	Session *sess;
+	CK_RV rv;
+	CK_ULONG i;
+
+	return_val_if_fail (size != NULL, CKR_ARGUMENTS_BAD);
+
+	sess = _p11_hash_get (the_sessions, handle_to_pointer (session));
+	if (!sess)
+		return CKR_SESSION_HANDLE_INVALID;
+
+	rv = lookup_object (sess, object, &attrs, NULL);
+	if (rv != CKR_OK)
+		return rv;
+
+	*size = 0;
+	for (i = 0; !is_attribute_terminator (attrs + i); i++) {
+		if (attrs[i].ulValueLen != (CK_ULONG)-1)
+			*size += attrs[i].ulValueLen;
+	}
+
+	return CKR_OK;
 }
 
 CK_RV
@@ -409,12 +1356,86 @@ mock_C_GetObjectSize__invalid_handle (CK_SESSION_HANDLE session,
 }
 
 CK_RV
+mock_C_GetAttributeValue (CK_SESSION_HANDLE session,
+                          CK_OBJECT_HANDLE object,
+                          CK_ATTRIBUTE_PTR template,
+                          CK_ULONG count)
+{
+	CK_ATTRIBUTE_PTR result;
+	CK_RV ret = CKR_OK;
+	CK_ATTRIBUTE_PTR attrs;
+	CK_ATTRIBUTE_PTR attr;
+	Session *sess;
+	CK_ULONG i;
+	CK_RV rv;
+
+	sess = _p11_hash_get (the_sessions, handle_to_pointer (session));
+	if (sess == NULL)
+		return CKR_SESSION_HANDLE_INVALID;
+
+	rv = lookup_object (sess, object, &attrs, NULL);
+	if (rv != CKR_OK)
+		return rv;
+
+	for (i = 0; i < count; ++i) {
+		result = template + i;
+		attr = find_attribute (attrs, result->type);
+		if (!attr) {
+			result->ulValueLen = (CK_ULONG)-1;
+			ret = CKR_ATTRIBUTE_TYPE_INVALID;
+			continue;
+		}
+
+		if (!result->pValue) {
+			result->ulValueLen = attr->ulValueLen;
+			continue;
+		}
+
+		if (result->ulValueLen >= attr->ulValueLen) {
+			memcpy (result->pValue, attr->pValue, attr->ulValueLen);
+			result->ulValueLen = attr->ulValueLen;
+			continue;
+		}
+
+		result->ulValueLen = (CK_ULONG)-1;
+		ret = CKR_BUFFER_TOO_SMALL;
+	}
+
+	return ret;
+}
+
+CK_RV
 mock_C_GetAttributeValue__invalid_handle (CK_SESSION_HANDLE session,
                                           CK_OBJECT_HANDLE object,
                                           CK_ATTRIBUTE_PTR template,
                                           CK_ULONG count)
 {
 	return CKR_SESSION_HANDLE_INVALID;
+}
+
+CK_RV
+mock_C_SetAttributeValue (CK_SESSION_HANDLE session,
+                          CK_OBJECT_HANDLE object,
+                          CK_ATTRIBUTE_PTR template,
+                          CK_ULONG count)
+{
+	Session *sess;
+	CK_ATTRIBUTE_PTR attrs;
+	hashmap *table;
+	CK_RV rv;
+
+	sess = _p11_hash_get (the_sessions, handle_to_pointer (session));
+	if (!sess)
+		return CKR_SESSION_HANDLE_INVALID;
+
+	rv = lookup_object (sess, object, &attrs, &table);
+	if (rv != CKR_OK)
+		return rv;
+
+	_p11_hash_steal (table, handle_to_pointer (object), NULL, (void **)&attrs);
+	attrs = build_attributes (attrs, template, count);
+	_p11_hash_set (table, handle_to_pointer (object), attrs);
+	return CKR_OK;
 }
 
 CK_RV
@@ -426,12 +1447,106 @@ mock_C_SetAttributeValue__invalid_handle (CK_SESSION_HANDLE session,
 	return CKR_SESSION_HANDLE_INVALID;
 }
 
+typedef struct _FindObjects {
+	CK_ATTRIBUTE_PTR template;
+	CK_ULONG count;
+	Session *sess;
+} FindObjects;
+
+static int
+enumerate_and_find_objects (CK_OBJECT_HANDLE object,
+                            CK_ATTRIBUTE_PTR attrs,
+                            CK_ULONG n_attrs,
+                            void *user_data)
+{
+	FindObjects *ctx = user_data;
+	CK_ATTRIBUTE_PTR match;
+	CK_ATTRIBUTE_PTR attr;
+	CK_ULONG i;
+
+	for (i = 0; i < ctx->count; ++i) {
+		match = ctx->template + i;
+		attr = find_attribute (attrs, match->type);
+		if (!attr)
+			return 1; /* Continue */
+
+		if (attr->ulValueLen != match->ulValueLen ||
+		    memcmp (attr->pValue, match->pValue, attr->ulValueLen) != 0)
+			return 1; /* Continue */
+	}
+
+	_p11_ptr_array_add (ctx->sess->matches, handle_to_pointer (object));
+	return 1; /* Continue */
+}
+
+CK_RV
+mock_C_FindObjectsInit (CK_SESSION_HANDLE session,
+                        CK_ATTRIBUTE_PTR template,
+                        CK_ULONG count)
+{
+	Session *sess;
+	FindObjects ctx;
+
+	sess = _p11_hash_get (the_sessions, handle_to_pointer (session));
+	if (!sess)
+		return CKR_SESSION_HANDLE_INVALID;
+
+	/* Starting an operation, cancels any previous one */
+	sess->crypto_mechanism = 0;
+	sess->hash_mechanism = 0;
+
+	sess->finding = CK_TRUE;
+	_p11_ptr_array_free (sess->matches);
+	sess->matches = _p11_ptr_array_create (NULL);
+
+	ctx.template = template;
+	ctx.count = count;
+	ctx.sess = sess;
+
+	mock_module_enumerate_objects (session, enumerate_and_find_objects, &ctx);
+	return CKR_OK;
+}
+
 CK_RV
 mock_C_FindObjectsInit__invalid_handle (CK_SESSION_HANDLE session,
                                         CK_ATTRIBUTE_PTR template,
                                         CK_ULONG count)
 {
 	return CKR_SESSION_HANDLE_INVALID;
+}
+
+CK_RV
+mock_C_FindObjects (CK_SESSION_HANDLE session,
+                    CK_OBJECT_HANDLE_PTR objects,
+                    CK_ULONG max_object_count,
+                    CK_ULONG_PTR object_count)
+{
+	Session *sess;
+	unsigned int count;
+
+	return_val_if_fail (objects, CKR_ARGUMENTS_BAD);
+	return_val_if_fail (object_count, CKR_ARGUMENTS_BAD);
+	return_val_if_fail (max_object_count != 0, CKR_ARGUMENTS_BAD);
+
+	sess = _p11_hash_get (the_sessions, handle_to_pointer (session));
+	if (sess == NULL)
+		return CKR_SESSION_HANDLE_INVALID;
+	if (!sess->finding)
+		return CKR_OPERATION_NOT_INITIALIZED;
+
+	*object_count = 0;
+	while (max_object_count > 0) {
+		count = _p11_ptr_array_count (sess->matches);
+		if (count == 0)
+			break;
+		*objects = pointer_to_handle (_p11_ptr_array_at (sess->matches, count - 1));
+		++objects;
+		--max_object_count;
+		++(*object_count);
+		_p11_ptr_array_remove (sess->matches, count - 1);
+	}
+
+	return CKR_OK;
 }
 
 CK_RV
@@ -446,9 +1561,55 @@ mock_C_FindObjects__invalid_handle (CK_SESSION_HANDLE session,
 }
 
 CK_RV
+mock_C_FindObjectsFinal (CK_SESSION_HANDLE session)
+{
+
+	Session *sess;
+
+	sess = _p11_hash_get (the_sessions, handle_to_pointer (session));
+	if (sess == NULL)
+		return CKR_SESSION_HANDLE_INVALID;
+	if (!sess->finding)
+		return CKR_OPERATION_NOT_INITIALIZED;
+
+	sess->finding = CK_FALSE;
+	_p11_ptr_array_free (sess->matches);
+	sess->matches = NULL;
+
+	return CKR_OK;
+}
+
+CK_RV
 mock_C_FindObjectsFinal__invalid_handle (CK_SESSION_HANDLE session)
 {
 	return CKR_SESSION_HANDLE_INVALID;
+}
+
+CK_RV
+mock_C_EncryptInit (CK_SESSION_HANDLE session,
+                    CK_MECHANISM_PTR mechanism,
+                    CK_OBJECT_HANDLE key)
+{
+	Session *sess;
+
+	return_val_if_fail (mechanism != NULL, CKR_ARGUMENTS_BAD);
+
+	sess = _p11_hash_get (the_sessions, handle_to_pointer (session));
+	if (!sess)
+		return CKR_SESSION_HANDLE_INVALID;
+
+	/* Starting an operation, cancels any previous one */
+	sess->finding = CK_FALSE;
+
+	if (mechanism->mechanism != CKM_MOCK_CAPITALIZE)
+		return CKR_MECHANISM_INVALID;
+	if (key != MOCK_PUBLIC_KEY_CAPITALIZE)
+		return CKR_KEY_HANDLE_INVALID;
+
+	sess->crypto_method = CKA_ENCRYPT;
+	sess->crypto_mechanism = CKM_MOCK_CAPITALIZE;
+	sess->crypto_key = key;
+	return CKR_OK;
 }
 
 CK_RV
@@ -460,14 +1621,70 @@ mock_C_EncryptInit__invalid_handle (CK_SESSION_HANDLE session,
 }
 
 CK_RV
+mock_C_Encrypt (CK_SESSION_HANDLE session,
+                CK_BYTE_PTR data,
+                CK_ULONG data_len,
+                CK_BYTE_PTR encrypted_data,
+                CK_ULONG_PTR encrypted_data_len)
+{
+	CK_ULONG last = 0;
+	CK_RV rv;
+	rv = mock_C_EncryptUpdate (session, data, data_len, encrypted_data, encrypted_data_len);
+	if (rv == CKR_OK)
+		rv = mock_C_EncryptFinal (session, encrypted_data, &last);
+	return rv;
+}
+
+CK_RV
 mock_C_Encrypt__invalid_handle (CK_SESSION_HANDLE session,
-                                CK_BYTE_PTR data, CK_ULONG data_len,
+                                CK_BYTE_PTR data,
+                                CK_ULONG data_len,
                                 CK_BYTE_PTR encrypted_data,
                                 CK_ULONG_PTR encrypted_data_len)
 {
 	return_val_if_fail (encrypted_data_len, CKR_ARGUMENTS_BAD);
 
 	return CKR_SESSION_HANDLE_INVALID;
+}
+
+CK_RV
+mock_C_EncryptUpdate (CK_SESSION_HANDLE session,
+                      CK_BYTE_PTR part,
+                      CK_ULONG part_len,
+                      CK_BYTE_PTR encrypted_part,
+                      CK_ULONG_PTR encrypted_part_len)
+{
+	Session *sess;
+	CK_ULONG i;
+
+	return_val_if_fail (part != NULL, CKR_DATA_INVALID);
+	return_val_if_fail (encrypted_part_len != NULL, CKR_ARGUMENTS_BAD);
+
+	sess = _p11_hash_get (the_sessions, handle_to_pointer (session));
+	if (!sess)
+		return CKR_SESSION_HANDLE_INVALID;
+
+	if (!sess->crypto_mechanism)
+		return CKR_OPERATION_NOT_INITIALIZED;
+	if (sess->crypto_method != CKA_ENCRYPT)
+		return CKR_OPERATION_NOT_INITIALIZED;
+	assert (sess->crypto_mechanism == CKM_MOCK_CAPITALIZE);
+	assert (sess->crypto_key == MOCK_PUBLIC_KEY_CAPITALIZE);
+
+	if (!encrypted_part) {
+		*encrypted_part_len = part_len;
+		return CKR_OK;
+	}
+
+	if (*encrypted_part_len < part_len) {
+		*encrypted_part_len = part_len;
+		return CKR_BUFFER_TOO_SMALL;
+	}
+
+	for (i = 0; i < part_len; ++i)
+		encrypted_part[i] = toupper (part[i]);
+	*encrypted_part_len = part_len;
+	return CKR_OK;
 }
 
 CK_RV
@@ -483,6 +1700,32 @@ mock_C_EncryptUpdate__invalid_handle (CK_SESSION_HANDLE session,
 }
 
 CK_RV
+mock_C_EncryptFinal (CK_SESSION_HANDLE session,
+                     CK_BYTE_PTR last_encrypted_part,
+                     CK_ULONG_PTR last_encrypted_part_len)
+{
+	Session *sess;
+
+	return_val_if_fail (last_encrypted_part_len != NULL, CKR_ARGUMENTS_BAD);
+
+	sess = _p11_hash_get (the_sessions, handle_to_pointer (session));
+	if (!sess)
+		return CKR_SESSION_HANDLE_INVALID;
+
+	if (!sess->crypto_mechanism)
+		return CKR_OPERATION_NOT_INITIALIZED;
+	if (sess->crypto_method != CKA_ENCRYPT)
+		return CKR_OPERATION_NOT_INITIALIZED;
+
+	*last_encrypted_part_len = 0;
+
+	sess->crypto_method = 0;
+	sess->crypto_mechanism = 0;
+	sess->crypto_key = 0;
+	return CKR_OK;
+}
+
+CK_RV
 mock_C_EncryptFinal__invalid_handle (CK_SESSION_HANDLE session,
                                      CK_BYTE_PTR last_part,
                                      CK_ULONG_PTR last_part_len)
@@ -493,11 +1736,53 @@ mock_C_EncryptFinal__invalid_handle (CK_SESSION_HANDLE session,
 }
 
 CK_RV
+mock_C_DecryptInit (CK_SESSION_HANDLE session,
+                    CK_MECHANISM_PTR mechanism,
+                    CK_OBJECT_HANDLE key)
+{
+	Session *sess;
+
+	return_val_if_fail (mechanism != NULL, CKR_ARGUMENTS_BAD);
+
+	sess = _p11_hash_get (the_sessions, handle_to_pointer (session));
+	if (!sess)
+		return CKR_SESSION_HANDLE_INVALID;
+
+	/* Starting an operation, cancels any previous one */
+	sess->finding = 0;
+
+	if (mechanism->mechanism != CKM_MOCK_CAPITALIZE)
+		return CKR_MECHANISM_INVALID;
+	if (key != MOCK_PRIVATE_KEY_CAPITALIZE)
+		return CKR_KEY_HANDLE_INVALID;
+
+	sess->crypto_method = CKA_DECRYPT;
+	sess->crypto_mechanism = CKM_MOCK_CAPITALIZE;
+	sess->crypto_key = key;
+	return CKR_OK;
+}
+
+CK_RV
 mock_C_DecryptInit__invalid_handle (CK_SESSION_HANDLE session,
                                     CK_MECHANISM_PTR mechanism,
                                     CK_OBJECT_HANDLE key)
 {
 	return CKR_SESSION_HANDLE_INVALID;
+}
+
+CK_RV
+mock_C_Decrypt (CK_SESSION_HANDLE session,
+                CK_BYTE_PTR encrypted_data,
+                CK_ULONG encrypted_data_len,
+                CK_BYTE_PTR data,
+                CK_ULONG_PTR data_len)
+{
+	CK_ULONG last = 0;
+	CK_RV rv;
+	rv = mock_C_DecryptUpdate (session, encrypted_data, encrypted_data_len, data, data_len);
+	if (rv == CKR_OK)
+		rv = mock_C_DecryptFinal (session, data, &last);
+	return rv;
 }
 
 CK_RV
@@ -513,6 +1798,46 @@ mock_C_Decrypt__invalid_handle (CK_SESSION_HANDLE session,
 }
 
 CK_RV
+mock_C_DecryptUpdate (CK_SESSION_HANDLE session,
+                      CK_BYTE_PTR encrypted_part,
+                      CK_ULONG encrypted_part_len,
+                      CK_BYTE_PTR part,
+                      CK_ULONG_PTR part_len)
+{
+	Session *sess;
+	CK_ULONG i;
+
+	return_val_if_fail (encrypted_part, CKR_ENCRYPTED_DATA_INVALID);
+	return_val_if_fail (part_len, CKR_ARGUMENTS_BAD);
+
+	sess = _p11_hash_get (the_sessions, handle_to_pointer (session));
+	if (!sess)
+		return CKR_SESSION_HANDLE_INVALID;
+
+	if (!sess->crypto_mechanism)
+		return CKR_OPERATION_NOT_INITIALIZED;
+	if (sess->crypto_method != CKA_DECRYPT)
+		return CKR_OPERATION_NOT_INITIALIZED;
+	assert (sess->crypto_mechanism == CKM_MOCK_CAPITALIZE);
+	assert (sess->crypto_key == MOCK_PRIVATE_KEY_CAPITALIZE);
+
+	if (!part) {
+		*part_len = encrypted_part_len;
+		return CKR_OK;
+	}
+
+	if (*part_len < encrypted_part_len) {
+		*part_len = encrypted_part_len;
+		return CKR_BUFFER_TOO_SMALL;
+	}
+
+	for (i = 0; i < encrypted_part_len; ++i)
+		part[i] = tolower (encrypted_part[i]);
+	*part_len = encrypted_part_len;
+	return CKR_OK;
+}
+
+CK_RV
 mock_C_DecryptUpdate__invalid_handle (CK_SESSION_HANDLE session,
                                       CK_BYTE_PTR enc_part,
                                       CK_ULONG enc_part_len,
@@ -522,6 +1847,33 @@ mock_C_DecryptUpdate__invalid_handle (CK_SESSION_HANDLE session,
 	return_val_if_fail (part_len, CKR_ARGUMENTS_BAD);
 
 	return CKR_SESSION_HANDLE_INVALID;
+}
+
+CK_RV
+mock_C_DecryptFinal (CK_SESSION_HANDLE session,
+                     CK_BYTE_PTR last_part,
+                     CK_ULONG_PTR last_part_len)
+{
+	Session *sess;
+
+	return_val_if_fail (last_part_len != NULL, CKR_ARGUMENTS_BAD);
+
+	sess = _p11_hash_get (the_sessions, handle_to_pointer (session));
+	if (!sess)
+		return CKR_SESSION_HANDLE_INVALID;
+
+	if (!sess->crypto_mechanism)
+		return CKR_OPERATION_NOT_INITIALIZED;
+	if (sess->crypto_method != CKA_DECRYPT)
+		return CKR_OPERATION_NOT_INITIALIZED;
+
+	*last_part_len = 0;
+
+	sess->crypto_method = 0;
+	sess->crypto_mechanism = 0;
+	sess->crypto_key = 0;
+
+	return CKR_OK;
 }
 
 CK_RV
@@ -535,10 +1887,52 @@ mock_C_DecryptFinal__invalid_handle (CK_SESSION_HANDLE session,
 }
 
 CK_RV
+mock_C_DigestInit (CK_SESSION_HANDLE session,
+                   CK_MECHANISM_PTR mechanism)
+{
+	Session *sess;
+
+	return_val_if_fail (mechanism != NULL, CKR_ARGUMENTS_BAD);
+
+	sess = _p11_hash_get (the_sessions, handle_to_pointer (session));
+	if (!sess)
+		return CKR_SESSION_HANDLE_INVALID;
+
+	/* Starting an operation, cancels any previous one */
+	sess->finding = CK_FALSE;
+
+	if (mechanism->mechanism != CKM_MOCK_COUNT)
+		return CKR_MECHANISM_INVALID;
+
+	sess->hash_mechanism = CKM_MOCK_COUNT;
+	sess->hash_method = (CK_ULONG)-1;
+	sess->hash_count = 0;
+	sess->hash_key = 0;
+	return CKR_OK;
+}
+
+CK_RV
 mock_C_DigestInit__invalid_handle (CK_SESSION_HANDLE session,
                                    CK_MECHANISM_PTR mechanism)
 {
 	return CKR_SESSION_HANDLE_INVALID;
+}
+
+CK_RV
+mock_C_Digest (CK_SESSION_HANDLE session,
+               CK_BYTE_PTR data,
+               CK_ULONG data_len,
+               CK_BYTE_PTR digest,
+               CK_ULONG_PTR digest_len)
+{
+	CK_RV rv;
+
+	return_val_if_fail (digest_len, CKR_ARGUMENTS_BAD);
+
+	rv = mock_C_DigestUpdate (session, data, data_len);
+	if (rv == CKR_OK)
+		rv = mock_C_DigestFinal (session, digest, digest_len);
+	return rv;
 }
 
 CK_RV
@@ -554,6 +1948,27 @@ mock_C_Digest__invalid_handle (CK_SESSION_HANDLE session,
 }
 
 CK_RV
+mock_C_DigestUpdate (CK_SESSION_HANDLE session,
+                     CK_BYTE_PTR part,
+                     CK_ULONG part_len)
+{
+	Session *sess;
+
+	sess = _p11_hash_get (the_sessions, handle_to_pointer (session));
+	if (!sess)
+		return CKR_SESSION_HANDLE_INVALID;
+
+	if (!sess->hash_mechanism)
+		return CKR_OPERATION_NOT_INITIALIZED;
+	if (sess->hash_method != (CK_ULONG)-1)
+		return CKR_OPERATION_NOT_INITIALIZED;
+	assert (sess->hash_mechanism == CKM_MOCK_COUNT);
+
+	sess->hash_count += part_len;
+	return CKR_OK;
+}
+
+CK_RV
 mock_C_DigestUpdate__invalid_handle (CK_SESSION_HANDLE session,
                                      CK_BYTE_PTR part,
                                      CK_ULONG part_len)
@@ -562,10 +1977,72 @@ mock_C_DigestUpdate__invalid_handle (CK_SESSION_HANDLE session,
 }
 
 CK_RV
+mock_C_DigestKey (CK_SESSION_HANDLE session,
+                  CK_OBJECT_HANDLE key)
+{
+	Session *sess;
+
+	sess = _p11_hash_get (the_sessions, handle_to_pointer (session));
+	if (!sess)
+		return CKR_SESSION_HANDLE_INVALID;
+
+	if (!sess->hash_mechanism)
+		return CKR_OPERATION_NOT_INITIALIZED;
+	if (sess->hash_method != (CK_ULONG)-1)
+		return CKR_OPERATION_NOT_INITIALIZED;
+	assert (sess->hash_mechanism == CKM_MOCK_COUNT);
+
+	sess->hash_count += key;
+	return CKR_OK;
+}
+
+CK_RV
 mock_C_DigestKey__invalid_handle (CK_SESSION_HANDLE session,
                                   CK_OBJECT_HANDLE key)
 {
 	return CKR_SESSION_HANDLE_INVALID;
+}
+
+CK_RV
+mock_C_DigestFinal (CK_SESSION_HANDLE session,
+                    CK_BYTE_PTR digest,
+                    CK_ULONG_PTR digest_len)
+{
+	char buffer[32];
+	Session *sess;
+	int len;
+
+	return_val_if_fail (digest_len != NULL, CKR_ARGUMENTS_BAD);
+
+	sess = _p11_hash_get (the_sessions, handle_to_pointer (session));
+	if (!sess)
+		return CKR_SESSION_HANDLE_INVALID;
+
+	if (!sess->hash_mechanism)
+		return CKR_OPERATION_NOT_INITIALIZED;
+	if (sess->hash_method != (CK_ULONG)-1)
+		return CKR_OPERATION_NOT_INITIALIZED;
+	assert (sess->hash_mechanism == CKM_MOCK_COUNT);
+
+	len = snprintf (buffer, sizeof (buffer), "%lu", sess->hash_count);
+
+	if (!digest) {
+		*digest_len = len;
+		return CKR_OK;
+	} else if (*digest_len < len) {
+		*digest_len = len;
+		return CKR_BUFFER_TOO_SMALL;
+	}
+
+	memcpy (digest, &buffer, len);
+	*digest_len = len;
+
+	sess->hash_count = 0;
+	sess->hash_mechanism = 0;
+	sess->hash_key = 0;
+	sess->hash_method = 0;
+
+	return CKR_OK;
 }
 
 CK_RV
@@ -578,12 +2055,107 @@ mock_C_DigestFinal__invalid_handle (CK_SESSION_HANDLE session,
 	return CKR_SESSION_HANDLE_INVALID;
 }
 
+static CK_RV
+prefix_mechanism_init (CK_SESSION_HANDLE session,
+                       CK_ATTRIBUTE_TYPE method,
+                       CK_MECHANISM_PTR mechanism,
+                       CK_OBJECT_HANDLE key)
+{
+	Session *sess;
+	CK_ATTRIBUTE_PTR attrs;
+	CK_ATTRIBUTE_PTR value;
+	CK_BYTE_PTR param;
+	CK_ULONG n_param;
+	CK_ULONG length;
+	CK_RV rv;
+
+	sess = _p11_hash_get (the_sessions, handle_to_pointer (session));
+	if (!sess)
+		return CKR_SESSION_HANDLE_INVALID;
+
+	if (mechanism->mechanism != CKM_MOCK_PREFIX)
+		return CKR_MECHANISM_INVALID;
+	if (method == CKA_SIGN || method == CKA_SIGN_RECOVER) {
+		if (key != MOCK_PRIVATE_KEY_PREFIX)
+			return CKR_KEY_HANDLE_INVALID;
+	} else if (method == CKA_VERIFY || CKA_VERIFY_RECOVER) {
+		if (key != MOCK_PUBLIC_KEY_PREFIX)
+			return CKR_KEY_HANDLE_INVALID;
+	} else {
+		assert_not_reached ();
+	}
+
+	rv = lookup_object (sess, key, &attrs, NULL);
+	if (rv != CKR_OK)
+		return rv;
+
+	value = find_attribute (attrs, CKA_VALUE);
+	if (value == NULL)
+		return CKR_KEY_TYPE_INCONSISTENT;
+
+	if (mechanism->pParameter) {
+		param = mechanism->pParameter;
+		n_param = mechanism->ulParameterLen;
+	} else {
+		param = (CK_BYTE_PTR)SIGNED_PREFIX;
+		n_param = strlen (SIGNED_PREFIX) + 1;
+	}
+
+	length = value->ulValueLen + n_param;
+	if (length > sizeof (sess->sign_prefix))
+		return CKR_KEY_SIZE_RANGE;
+
+	/* Starting an operation, cancels any finding */
+	sess->finding = CK_FALSE;
+
+	sess->hash_mechanism = CKM_MOCK_PREFIX;
+	sess->hash_method = method;
+	sess->hash_key = key;
+	sess->hash_count = 0;
+
+	memcpy (sess->sign_prefix, param, n_param);
+	memcpy (sess->sign_prefix + n_param, value->pValue, value->ulValueLen);
+	sess->n_sign_prefix = length;
+
+	/* The private key has CKA_ALWAYS_AUTHENTICATE above */
+	if (method == CKA_SIGN || method == CKA_SIGN_RECOVER)
+		sess->want_context_login = CK_TRUE;
+
+	return CKR_OK;
+
+}
+
+CK_RV
+mock_C_SignInit (CK_SESSION_HANDLE session,
+                 CK_MECHANISM_PTR mechanism,
+                 CK_OBJECT_HANDLE key)
+{
+	return_val_if_fail (mechanism != NULL, CKR_ARGUMENTS_BAD);
+	return prefix_mechanism_init (session, CKA_SIGN, mechanism, key);
+}
+
 CK_RV
 mock_C_SignInit__invalid_handle (CK_SESSION_HANDLE session,
                                  CK_MECHANISM_PTR mechanism,
                                  CK_OBJECT_HANDLE key)
 {
 	return CKR_SESSION_HANDLE_INVALID;
+}
+
+CK_RV
+mock_C_Sign (CK_SESSION_HANDLE session,
+             CK_BYTE_PTR data,
+             CK_ULONG data_len,
+             CK_BYTE_PTR signature,
+             CK_ULONG_PTR signature_len)
+{
+	CK_RV rv;
+
+	rv = mock_C_SignUpdate (session, data, data_len);
+	if (rv == CKR_OK)
+		rv = mock_C_SignFinal (session, signature, signature_len);
+
+	return rv;
 }
 
 CK_RV
@@ -599,6 +2171,26 @@ mock_C_Sign__invalid_handle (CK_SESSION_HANDLE session,
 }
 
 CK_RV
+mock_C_SignUpdate (CK_SESSION_HANDLE session,
+                   CK_BYTE_PTR part,
+                   CK_ULONG part_len)
+{
+	Session *sess;
+
+	sess = _p11_hash_get (the_sessions, handle_to_pointer (session));
+	if (!sess)
+		return CKR_SESSION_HANDLE_INVALID;
+	if (sess->hash_mechanism != CKM_MOCK_PREFIX ||
+	    sess->hash_method != CKA_SIGN)
+		return CKR_OPERATION_NOT_INITIALIZED;
+	if (sess->want_context_login)
+		return CKR_USER_NOT_LOGGED_IN;
+
+	sess->hash_count += part_len;
+	return CKR_OK;
+}
+
+CK_RV
 mock_C_SignUpdate__invalid_handle (CK_SESSION_HANDLE session,
                                    CK_BYTE_PTR part,
                                    CK_ULONG part_len)
@@ -606,6 +2198,52 @@ mock_C_SignUpdate__invalid_handle (CK_SESSION_HANDLE session,
 	return_val_if_fail (part_len, CKR_ARGUMENTS_BAD);
 
 	return CKR_SESSION_HANDLE_INVALID;
+}
+
+CK_RV
+mock_C_SignFinal (CK_SESSION_HANDLE session,
+                  CK_BYTE_PTR signature,
+                  CK_ULONG_PTR signature_len)
+{
+	char buffer[32];
+	Session *sess;
+	CK_ULONG length;
+	int len;
+
+	return_val_if_fail (signature_len, CKR_ARGUMENTS_BAD);
+
+	sess = _p11_hash_get (the_sessions, handle_to_pointer (session));
+	if (!sess)
+		return CKR_SESSION_HANDLE_INVALID;
+	if (sess->hash_mechanism != CKM_MOCK_PREFIX ||
+	    sess->hash_method != CKA_SIGN)
+		return CKR_OPERATION_NOT_INITIALIZED;
+	if (sess->want_context_login)
+		return CKR_USER_NOT_LOGGED_IN;
+
+	len = snprintf (buffer, sizeof (buffer), "%lu", sess->hash_count);
+	length = sess->n_sign_prefix + len;
+
+	if (!signature) {
+		*signature_len = length;
+		return CKR_OK;
+	}
+
+	if (*signature_len < length) {
+		*signature_len = length;
+		return CKR_BUFFER_TOO_SMALL;
+	}
+
+	memcpy (signature, sess->sign_prefix, sess->n_sign_prefix);
+	memcpy (signature + sess->n_sign_prefix, buffer, len);
+	*signature_len = length;
+
+	sess->hash_mechanism = 0;
+	sess->hash_method = 0;
+	sess->hash_count = 0;
+	sess->hash_key = 0;
+
+	return CKR_OK;
 }
 
 CK_RV
@@ -619,11 +2257,66 @@ mock_C_SignFinal__invalid_handle (CK_SESSION_HANDLE session,
 }
 
 CK_RV
+mock_C_SignRecoverInit (CK_SESSION_HANDLE session,
+                        CK_MECHANISM_PTR mechanism,
+                        CK_OBJECT_HANDLE key)
+{
+	return_val_if_fail (mechanism != NULL, CKR_ARGUMENTS_BAD);
+	return prefix_mechanism_init (session, CKA_SIGN_RECOVER, mechanism, key);
+}
+
+CK_RV
 mock_C_SignRecoverInit__invalid_handle (CK_SESSION_HANDLE session,
                                         CK_MECHANISM_PTR mechanism,
                                         CK_OBJECT_HANDLE key)
 {
 	return CKR_SESSION_HANDLE_INVALID;
+}
+
+CK_RV
+mock_C_SignRecover (CK_SESSION_HANDLE session,
+                    CK_BYTE_PTR data,
+                    CK_ULONG data_len,
+                    CK_BYTE_PTR signature,
+                    CK_ULONG_PTR signature_len)
+{
+	Session *sess;
+	CK_ULONG length;
+
+	return_val_if_fail (data, CKR_DATA_INVALID);
+	return_val_if_fail (signature_len, CKR_ARGUMENTS_BAD);
+
+	sess = _p11_hash_get (the_sessions, handle_to_pointer (session));
+	if (!sess)
+		return CKR_SESSION_HANDLE_INVALID;
+	if (sess->hash_method != CKA_SIGN_RECOVER ||
+	    sess->hash_mechanism != CKM_MOCK_PREFIX)
+		return CKR_OPERATION_NOT_INITIALIZED;
+	if (sess->want_context_login)
+		return CKR_USER_NOT_LOGGED_IN;
+
+	length = sess->n_sign_prefix + data_len;
+
+	if (!signature) {
+		*signature_len = length;
+		return CKR_OK;
+	}
+
+	if (*signature_len < length) {
+		*signature_len = length;
+		return CKR_BUFFER_TOO_SMALL;
+	}
+
+	memcpy (signature, sess->sign_prefix, sess->n_sign_prefix);
+	memcpy (signature + sess->n_sign_prefix, data, data_len);
+	*signature_len = length;
+
+	sess->hash_method = 0;
+	sess->hash_mechanism = 0;
+	sess->hash_key = 0;
+	sess->hash_count = 0;
+
+	return CKR_OK;
 }
 
 CK_RV
@@ -639,11 +2332,36 @@ mock_C_SignRecover__invalid_handle (CK_SESSION_HANDLE session,
 }
 
 CK_RV
+mock_C_VerifyInit (CK_SESSION_HANDLE session,
+                   CK_MECHANISM_PTR mechanism,
+                   CK_OBJECT_HANDLE key)
+{
+	return_val_if_fail (mechanism != NULL, CKR_ARGUMENTS_BAD);
+	return prefix_mechanism_init (session, CKA_VERIFY, mechanism, key);
+}
+
+CK_RV
 mock_C_VerifyInit__invalid_handle (CK_SESSION_HANDLE session,
                                    CK_MECHANISM_PTR mechanism,
                                    CK_OBJECT_HANDLE key)
 {
 	return CKR_SESSION_HANDLE_INVALID;
+}
+
+CK_RV
+mock_C_Verify (CK_SESSION_HANDLE session,
+               CK_BYTE_PTR data,
+               CK_ULONG data_len,
+               CK_BYTE_PTR signature,
+               CK_ULONG signature_len)
+{
+	CK_RV rv;
+
+	rv = mock_C_VerifyUpdate (session, data, data_len);
+	if (rv == CKR_OK)
+		rv = mock_C_VerifyFinal (session, signature, signature_len);
+
+	return rv;
 }
 
 CK_RV
@@ -657,11 +2375,70 @@ mock_C_Verify__invalid_handle (CK_SESSION_HANDLE session,
 }
 
 CK_RV
+mock_C_VerifyUpdate (CK_SESSION_HANDLE session,
+                     CK_BYTE_PTR part,
+                     CK_ULONG part_len)
+{
+	Session *sess;
+
+	sess = _p11_hash_get (the_sessions, handle_to_pointer (session));
+	if (!sess)
+		return CKR_SESSION_HANDLE_INVALID;
+	if (sess->hash_mechanism != CKM_MOCK_PREFIX ||
+	    sess->hash_method != CKA_VERIFY)
+		return CKR_OPERATION_NOT_INITIALIZED;
+	if (sess->want_context_login)
+		return CKR_USER_NOT_LOGGED_IN;
+
+	sess->hash_count += part_len;
+	return CKR_OK;
+}
+
+CK_RV
 mock_C_VerifyUpdate__invalid_handle (CK_SESSION_HANDLE session,
                                      CK_BYTE_PTR part,
                                      CK_ULONG part_len)
 {
 	return CKR_SESSION_HANDLE_INVALID;
+}
+
+CK_RV
+mock_C_VerifyFinal (CK_SESSION_HANDLE session,
+                    CK_BYTE_PTR signature,
+                    CK_ULONG signature_len)
+{
+	char buffer[32];
+	Session *sess;
+	CK_ULONG length;
+	int len;
+
+	return_val_if_fail (signature, CKR_ARGUMENTS_BAD);
+
+	sess = _p11_hash_get (the_sessions, handle_to_pointer (session));
+	if (!sess)
+		return CKR_SESSION_HANDLE_INVALID;
+	if (sess->hash_mechanism != CKM_MOCK_PREFIX ||
+	    sess->hash_method != CKA_VERIFY)
+		return CKR_OPERATION_NOT_INITIALIZED;
+	if (sess->want_context_login)
+		return CKR_USER_NOT_LOGGED_IN;
+
+	len = snprintf (buffer, sizeof (buffer), "%lu", sess->hash_count);
+	length = sess->n_sign_prefix + len;
+
+	if (!signature || signature_len != length)
+		return CKR_SIGNATURE_LEN_RANGE;
+
+	if (memcmp (signature, sess->sign_prefix, sess->n_sign_prefix) != 0 ||
+	    memcmp (signature + sess->n_sign_prefix, buffer, len) != 0)
+		return CKR_SIGNATURE_INVALID;
+
+	sess->hash_mechanism = 0;
+	sess->hash_method = 0;
+	sess->hash_count = 0;
+	sess->hash_key = 0;
+
+	return CKR_OK;
 }
 
 CK_RV
@@ -673,11 +2450,62 @@ mock_C_VerifyFinal__invalid_handle (CK_SESSION_HANDLE session,
 }
 
 CK_RV
+mock_C_VerifyRecoverInit (CK_SESSION_HANDLE session,
+                          CK_MECHANISM_PTR mechanism,
+                          CK_OBJECT_HANDLE key)
+{
+	return_val_if_fail (mechanism != NULL, CKR_ARGUMENTS_BAD);
+	return prefix_mechanism_init (session, CKA_VERIFY_RECOVER, mechanism, key);
+}
+
+CK_RV
 mock_C_VerifyRecoverInit__invalid_handle (CK_SESSION_HANDLE session,
                                           CK_MECHANISM_PTR mechanism,
                                           CK_OBJECT_HANDLE key)
 {
 	return CKR_SESSION_HANDLE_INVALID;
+}
+
+CK_RV
+mock_C_VerifyRecover (CK_SESSION_HANDLE session,
+                      CK_BYTE_PTR signature,
+                      CK_ULONG signature_len,
+                      CK_BYTE_PTR data,
+                      CK_ULONG_PTR data_len)
+{
+	Session *sess;
+	CK_ULONG length;
+
+	return_val_if_fail (signature, CKR_ARGUMENTS_BAD);
+
+	sess = _p11_hash_get (the_sessions, handle_to_pointer (session));
+	if (!sess)
+		return CKR_SESSION_HANDLE_INVALID;
+	if (sess->hash_mechanism != CKM_MOCK_PREFIX ||
+	    sess->hash_method != CKA_VERIFY_RECOVER)
+		return CKR_OPERATION_NOT_INITIALIZED;
+	if (sess->want_context_login)
+		return CKR_USER_NOT_LOGGED_IN;
+
+	if (signature_len < sess->n_sign_prefix)
+		return CKR_SIGNATURE_LEN_RANGE;
+	if (memcmp (signature, sess->sign_prefix, sess->n_sign_prefix) != 0)
+		return CKR_SIGNATURE_INVALID;
+
+	length = signature_len - sess->n_sign_prefix;
+	if (!data) {
+		*data_len = length;
+		return CKR_OK;
+	}
+
+	if (*data_len < length) {
+		*data_len = length;
+		return CKR_BUFFER_TOO_SMALL;
+	}
+
+	*data_len = length;
+	memcpy (data, signature + sess->n_sign_prefix, length);
+	return CKR_OK;
 }
 
 CK_RV
@@ -693,14 +2521,47 @@ mock_C_VerifyRecover__invalid_handle (CK_SESSION_HANDLE session,
 }
 
 CK_RV
+mock_C_DigestEncryptUpdate (CK_SESSION_HANDLE session,
+                            CK_BYTE_PTR part,
+                            CK_ULONG part_len,
+                            CK_BYTE_PTR encrypted_part,
+                            CK_ULONG_PTR encrypted_part_len)
+{
+	CK_RV rv;
+
+	rv = mock_C_EncryptUpdate (session, part, part_len, encrypted_part, encrypted_part_len);
+	if (rv == CKR_OK)
+		rv = mock_C_DigestUpdate (session, part, part_len);
+
+	return rv;
+}
+
+CK_RV
 mock_C_DigestEncryptUpdate__invalid_handle (CK_SESSION_HANDLE session,
                                             CK_BYTE_PTR part,
-                           CK_ULONG part_len, CK_BYTE_PTR enc_part,
-                           CK_ULONG_PTR enc_part_len)
+                                            CK_ULONG part_len,
+                                            CK_BYTE_PTR enc_part,
+                                            CK_ULONG_PTR enc_part_len)
 {
 	return_val_if_fail (enc_part_len, CKR_ARGUMENTS_BAD);
 
 	return CKR_SESSION_HANDLE_INVALID;
+}
+
+CK_RV
+mock_C_DecryptDigestUpdate (CK_SESSION_HANDLE session,
+                            CK_BYTE_PTR encrypted_part,
+                            CK_ULONG encrypted_part_len,
+                            CK_BYTE_PTR part,
+                            CK_ULONG_PTR part_len)
+{
+	CK_RV rv;
+
+	rv = mock_C_DecryptUpdate (session, encrypted_part, encrypted_part_len, part, part_len);
+	if (rv == CKR_OK)
+		rv = mock_C_DigestUpdate (session, part, *part_len);
+
+	return rv;
 }
 
 CK_RV
@@ -716,6 +2577,22 @@ mock_C_DecryptDigestUpdate__invalid_handle (CK_SESSION_HANDLE session,
 }
 
 CK_RV
+mock_C_SignEncryptUpdate (CK_SESSION_HANDLE session,
+                          CK_BYTE_PTR part,
+                          CK_ULONG part_len,
+                          CK_BYTE_PTR encrypted_part,
+                          CK_ULONG_PTR encrypted_part_len)
+{
+	CK_RV rv;
+
+	rv = mock_C_EncryptUpdate (session, part, part_len, encrypted_part, encrypted_part_len);
+	if (rv == CKR_OK)
+		rv = mock_C_SignUpdate (session, part, part_len);
+
+	return rv;
+}
+
+CK_RV
 mock_C_SignEncryptUpdate__invalid_handle (CK_SESSION_HANDLE session,
                                           CK_BYTE_PTR part,
                                           CK_ULONG part_len,
@@ -725,6 +2602,22 @@ mock_C_SignEncryptUpdate__invalid_handle (CK_SESSION_HANDLE session,
 	return_val_if_fail (enc_part_len, CKR_ARGUMENTS_BAD);
 
 	return CKR_SESSION_HANDLE_INVALID;
+}
+
+CK_RV
+mock_C_DecryptVerifyUpdate (CK_SESSION_HANDLE session,
+                            CK_BYTE_PTR encrypted_part,
+                            CK_ULONG encrypted_part_len,
+                            CK_BYTE_PTR part,
+                            CK_ULONG_PTR part_len)
+{
+	CK_RV rv;
+
+	rv = mock_C_DecryptUpdate (session, encrypted_part, encrypted_part_len, part, part_len);
+	if (rv == CKR_OK)
+		rv = mock_C_VerifyUpdate (session, part, *part_len);
+
+	return rv;
 }
 
 CK_RV
@@ -740,6 +2633,50 @@ mock_C_DecryptVerifyUpdate__invalid_handle (CK_SESSION_HANDLE session,
 }
 
 CK_RV
+mock_C_GenerateKey (CK_SESSION_HANDLE session,
+                    CK_MECHANISM_PTR mechanism,
+                    CK_ATTRIBUTE_PTR template,
+                    CK_ULONG count,
+                    CK_OBJECT_HANDLE_PTR key)
+{
+	CK_ATTRIBUTE_PTR attrs;
+	CK_ATTRIBUTE value;
+	Session *sess;
+	CK_BBOOL token;
+
+	return_val_if_fail (mechanism, CKR_MECHANISM_INVALID);
+	return_val_if_fail (template, CKR_TEMPLATE_INCOMPLETE);
+	return_val_if_fail (count, CKR_TEMPLATE_INCOMPLETE);
+	return_val_if_fail (key, CKR_ARGUMENTS_BAD);
+
+	sess = _p11_hash_get (the_sessions, handle_to_pointer (session));
+	if (!sess)
+		return CKR_SESSION_HANDLE_INVALID;
+
+	if (mechanism->mechanism != CKM_MOCK_GENERATE)
+		return CKR_MECHANISM_INVALID;
+
+	if (!mechanism->pParameter || mechanism->ulParameterLen != 9 ||
+	    memcmp (mechanism->pParameter, "generate", 9) != 0)
+		return CKR_MECHANISM_PARAM_INVALID;
+
+	value.type = CKA_VALUE;
+	value.pValue = "generated";
+	value.ulValueLen = strlen (value.pValue);
+
+	attrs = build_attributes (NULL, template, count);
+	attrs = build_attributes (attrs, &value, 1);
+
+	*key = ++unique_identifier;
+	if (find_boolean_attribute (attrs, CKA_TOKEN, &token) && token)
+		_p11_hash_set (the_objects, handle_to_pointer (*key), attrs);
+	else
+		_p11_hash_set (sess->objects, handle_to_pointer (*key), attrs);
+
+	return CKR_OK;
+}
+
+CK_RV
 mock_C_GenerateKey__invalid_handle (CK_SESSION_HANDLE session,
                                     CK_MECHANISM_PTR mechanism,
                                     CK_ATTRIBUTE_PTR template,
@@ -747,6 +2684,65 @@ mock_C_GenerateKey__invalid_handle (CK_SESSION_HANDLE session,
                                     CK_OBJECT_HANDLE_PTR key)
 {
 	return CKR_SESSION_HANDLE_INVALID;
+}
+
+CK_RV
+mock_C_GenerateKeyPair (CK_SESSION_HANDLE session,
+                        CK_MECHANISM_PTR mechanism,
+                        CK_ATTRIBUTE_PTR public_key_template,
+                        CK_ULONG public_key_count,
+                        CK_ATTRIBUTE_PTR private_key_template,
+                        CK_ULONG private_key_count,
+                        CK_OBJECT_HANDLE_PTR public_key,
+                        CK_OBJECT_HANDLE_PTR private_key)
+{
+	CK_ATTRIBUTE_PTR attrs;
+	CK_ATTRIBUTE value;
+	Session *sess;
+	CK_BBOOL token;
+
+	return_val_if_fail (mechanism, CKR_MECHANISM_INVALID);
+	return_val_if_fail (public_key_template, CKR_TEMPLATE_INCOMPLETE);
+	return_val_if_fail (public_key_count, CKR_TEMPLATE_INCOMPLETE);
+	return_val_if_fail (private_key_template, CKR_TEMPLATE_INCOMPLETE);
+	return_val_if_fail (private_key_count, CKR_TEMPLATE_INCOMPLETE);
+	return_val_if_fail (public_key, CKR_ARGUMENTS_BAD);
+	return_val_if_fail (private_key, CKR_ARGUMENTS_BAD);
+
+	sess = _p11_hash_get (the_sessions, handle_to_pointer (session));
+	if (!sess)
+		return CKR_SESSION_HANDLE_INVALID;
+
+	if (mechanism->mechanism != CKM_MOCK_GENERATE)
+		return CKR_MECHANISM_INVALID;
+
+	if (!mechanism->pParameter || mechanism->ulParameterLen != 9 ||
+	    memcmp (mechanism->pParameter, "generate", 9) != 0)
+		return CKR_MECHANISM_PARAM_INVALID;
+
+	value.type = CKA_VALUE;
+	value.pValue = "generated";
+	value.ulValueLen = strlen (value.pValue);
+
+	attrs = build_attributes (NULL, public_key_template, public_key_count);
+	attrs = build_attributes (attrs, &value, 1);
+
+	*public_key = ++unique_identifier;
+	if (find_boolean_attribute (attrs, CKA_TOKEN, &token) && token)
+		_p11_hash_set (the_objects, handle_to_pointer (*public_key), attrs);
+	else
+		_p11_hash_set (sess->objects, handle_to_pointer (*public_key), attrs);
+
+	attrs = build_attributes (NULL, private_key_template, private_key_count);
+	attrs = build_attributes (attrs, &value, 1);
+
+	*private_key = ++unique_identifier;
+	if (find_boolean_attribute (attrs, CKA_TOKEN, &token) && token)
+		_p11_hash_set (the_objects, handle_to_pointer (*private_key), attrs);
+	else
+		_p11_hash_set (sess->objects, handle_to_pointer (*private_key), attrs);
+
+	return CKR_OK;
 }
 
 CK_RV
@@ -763,6 +2759,69 @@ mock_C_GenerateKeyPair__invalid_handle (CK_SESSION_HANDLE session,
 }
 
 CK_RV
+mock_C_WrapKey (CK_SESSION_HANDLE session,
+                CK_MECHANISM_PTR mechanism,
+                CK_OBJECT_HANDLE wrapping_key,
+                CK_OBJECT_HANDLE key,
+                CK_BYTE_PTR wrapped_key,
+                CK_ULONG_PTR wrapped_key_len)
+{
+	CK_ATTRIBUTE_PTR attrs;
+	CK_ATTRIBUTE_PTR attr;
+	Session *sess;
+	CK_RV rv;
+
+	return_val_if_fail (mechanism, CKR_MECHANISM_INVALID);
+	return_val_if_fail (wrapping_key, CKR_OBJECT_HANDLE_INVALID);
+	return_val_if_fail (key, CKR_OBJECT_HANDLE_INVALID);
+	return_val_if_fail (wrapped_key_len, CKR_WRAPPED_KEY_LEN_RANGE);
+
+	sess = _p11_hash_get (the_sessions, handle_to_pointer (session));
+	if (!sess)
+		return CKR_SESSION_HANDLE_INVALID;
+
+	rv = lookup_object (sess, wrapping_key, &attrs, NULL);
+	if (rv == CKR_OBJECT_HANDLE_INVALID)
+		return CKR_WRAPPING_KEY_HANDLE_INVALID;
+	else if (rv != CKR_OK)
+		return rv;
+
+	rv = lookup_object (sess, key, &attrs, NULL);
+	if (rv == CKR_OBJECT_HANDLE_INVALID)
+		return CKR_WRAPPING_KEY_HANDLE_INVALID;
+	else if (rv != CKR_OK)
+		return rv;
+
+	if (mechanism->mechanism != CKM_MOCK_WRAP)
+		return CKR_MECHANISM_INVALID;
+
+	if (mechanism->pParameter == NULL ||
+	    mechanism->ulParameterLen != 4 ||
+	    memcmp (mechanism->pParameter, "wrap", 4) != 0) {
+		return CKR_MECHANISM_PARAM_INVALID;
+	}
+
+	attr = find_attribute (attrs, CKA_VALUE);
+	if (attr == NULL)
+		return CKR_WRAPPED_KEY_INVALID;
+
+	if (!wrapped_key) {
+		*wrapped_key_len = attr->ulValueLen;
+		return CKR_OK;
+	}
+
+	if (*wrapped_key_len < attr->ulValueLen) {
+		*wrapped_key_len = attr->ulValueLen;
+		return CKR_BUFFER_TOO_SMALL;
+	}
+
+	memcpy (wrapped_key, attr->pValue, attr->ulValueLen);
+	*wrapped_key_len = attr->ulValueLen;
+
+	return CKR_OK;
+}
+
+CK_RV
 mock_C_WrapKey__invalid_handle (CK_SESSION_HANDLE session,
                                 CK_MECHANISM_PTR mechanism,
                                 CK_OBJECT_HANDLE wrapping_key,
@@ -773,6 +2832,65 @@ mock_C_WrapKey__invalid_handle (CK_SESSION_HANDLE session,
 	return_val_if_fail (wrapped_key_len, CKR_ARGUMENTS_BAD);
 
 	return CKR_SESSION_HANDLE_INVALID;
+}
+
+CK_RV
+mock_C_UnwrapKey (CK_SESSION_HANDLE session,
+                  CK_MECHANISM_PTR mechanism,
+                  CK_OBJECT_HANDLE unwrapping_key,
+                  CK_BYTE_PTR wrapped_key,
+                  CK_ULONG wrapped_key_len,
+                  CK_ATTRIBUTE_PTR template,
+                  CK_ULONG count,
+                  CK_OBJECT_HANDLE_PTR key)
+{
+	CK_ATTRIBUTE_PTR attrs;
+	CK_ATTRIBUTE value;
+	Session *sess;
+	CK_BBOOL token;
+	CK_RV rv;
+
+	return_val_if_fail (mechanism, CKR_MECHANISM_INVALID);
+	return_val_if_fail (unwrapping_key, CKR_WRAPPING_KEY_HANDLE_INVALID);
+	return_val_if_fail (wrapped_key, CKR_WRAPPED_KEY_INVALID);
+	return_val_if_fail (wrapped_key_len, CKR_WRAPPED_KEY_LEN_RANGE);
+	return_val_if_fail (key, CKR_ARGUMENTS_BAD);
+	return_val_if_fail (template, CKR_TEMPLATE_INCOMPLETE);
+	return_val_if_fail (count, CKR_TEMPLATE_INCONSISTENT);
+
+	sess = _p11_hash_get (the_sessions, handle_to_pointer (session));
+	if (!sess)
+		return CKR_SESSION_HANDLE_INVALID;
+
+	rv = lookup_object (sess, unwrapping_key, &attrs, NULL);
+	if (rv == CKR_OBJECT_HANDLE_INVALID)
+		return CKR_WRAPPING_KEY_HANDLE_INVALID;
+	else if (rv != CKR_OK)
+		return rv;
+
+	if (mechanism->mechanism != CKM_MOCK_WRAP)
+		return CKR_MECHANISM_INVALID;
+
+	if (mechanism->pParameter == NULL ||
+	    mechanism->ulParameterLen != 4 ||
+	    memcmp (mechanism->pParameter, "wrap", 4) != 0) {
+		return CKR_MECHANISM_PARAM_INVALID;
+	}
+
+	value.type = CKA_VALUE;
+	value.pValue = wrapped_key;
+	value.ulValueLen = wrapped_key_len;
+
+	attrs = build_attributes (NULL, template, count);
+	attrs = build_attributes (attrs, &value, 1);
+
+	*key = ++unique_identifier;
+	if (find_boolean_attribute (attrs, CKA_TOKEN, &token) && token)
+		_p11_hash_set (the_objects, handle_to_pointer (*key), attrs);
+	else
+		_p11_hash_set (sess->objects, handle_to_pointer (*key), attrs);
+
+	return CKR_OK;
 }
 
 CK_RV
@@ -789,6 +2907,60 @@ mock_C_UnwrapKey__invalid_handle (CK_SESSION_HANDLE session,
 }
 
 CK_RV
+mock_C_DeriveKey (CK_SESSION_HANDLE session,
+                  CK_MECHANISM_PTR mechanism,
+                  CK_OBJECT_HANDLE base_key,
+                  CK_ATTRIBUTE_PTR template,
+                  CK_ULONG count,
+                  CK_OBJECT_HANDLE_PTR key)
+{
+	CK_ATTRIBUTE_PTR attrs, copy;
+	CK_ATTRIBUTE value;
+	Session *sess;
+	CK_BBOOL token;
+	CK_RV rv;
+
+	return_val_if_fail (mechanism, CKR_MECHANISM_INVALID);
+	return_val_if_fail (count, CKR_TEMPLATE_INCOMPLETE);
+	return_val_if_fail (template, CKR_TEMPLATE_INCOMPLETE);
+	return_val_if_fail (key, CKR_ARGUMENTS_BAD);
+
+	sess = _p11_hash_get (the_sessions, handle_to_pointer (session));
+	if (!sess)
+		return CKR_SESSION_HANDLE_INVALID;
+
+	rv = lookup_object (sess, base_key, &attrs, NULL);
+	if (rv == CKR_OBJECT_HANDLE_INVALID)
+		return CKR_KEY_HANDLE_INVALID;
+	else if (rv != CKR_OK)
+		return rv;
+
+	if (mechanism->mechanism != CKM_MOCK_DERIVE)
+		return CKR_MECHANISM_INVALID;
+
+	if (mechanism->pParameter == NULL ||
+	    mechanism->ulParameterLen != 6 ||
+	    memcmp (mechanism->pParameter, "derive", 6) != 0) {
+		return CKR_MECHANISM_PARAM_INVALID;
+	}
+
+	value.type = CKA_VALUE;
+	value.pValue = "derived";
+	value.ulValueLen = strlen (value.pValue);
+
+	copy = build_attributes (NULL, template, count);
+	copy = build_attributes (copy, &value, 1);
+
+	*key = ++unique_identifier;
+	if (find_boolean_attribute (copy, CKA_TOKEN, &token) && token)
+		_p11_hash_set (the_objects, handle_to_pointer (*key), copy);
+	else
+		_p11_hash_set (sess->objects, handle_to_pointer (*key), copy);
+
+	return CKR_OK;
+}
+
+CK_RV
 mock_C_DeriveKey__invalid_handle (CK_SESSION_HANDLE session,
                                   CK_MECHANISM_PTR mechanism,
                                   CK_OBJECT_HANDLE base_key,
@@ -800,11 +2972,54 @@ mock_C_DeriveKey__invalid_handle (CK_SESSION_HANDLE session,
 }
 
 CK_RV
+mock_C_SeedRandom (CK_SESSION_HANDLE session,
+                   CK_BYTE_PTR seed,
+                   CK_ULONG seed_len)
+{
+	Session *sess;
+
+	sess = _p11_hash_get (the_sessions, handle_to_pointer (session));
+	if (!sess)
+		return CKR_SESSION_HANDLE_INVALID;
+
+	if (seed_len > sizeof (sess->random_seed))
+		return CKR_RANDOM_SEED_NOT_SUPPORTED;
+
+	memcpy (sess->random_seed, seed, seed_len);
+	sess->random_seed_len = seed_len;
+	return CKR_OK;
+}
+
+CK_RV
 mock_C_SeedRandom__invalid_handle (CK_SESSION_HANDLE session,
                                    CK_BYTE_PTR seed,
                                    CK_ULONG seed_len)
 {
 	return CKR_SESSION_HANDLE_INVALID;
+}
+
+CK_RV
+mock_C_GenerateRandom (CK_SESSION_HANDLE session,
+                       CK_BYTE_PTR random_data,
+                       CK_ULONG random_len)
+{
+	Session *sess;
+	CK_ULONG block;
+
+	sess = _p11_hash_get (the_sessions, handle_to_pointer (session));
+	if (!sess)
+		return CKR_SESSION_HANDLE_INVALID;
+
+	while (random_len > 0) {
+		block = sess->random_seed_len;
+		if (block > random_len)
+			block = random_len;
+		memcpy (random_data, sess->random_seed, block);
+		random_data += block;
+		random_len -= block;
+	}
+
+	return CKR_OK;
 }
 
 CK_RV
@@ -885,6 +3100,78 @@ CK_FUNCTION_LIST mock_module_no_slots = {
 	mock_C_GetFunctionStatus__not_parallel,
 	mock_C_CancelFunction__not_parallel,
 	mock_C_WaitForSlotEvent__no_event,
+};
+
+CK_FUNCTION_LIST mock_module = {
+	{ CRYPTOKI_VERSION_MAJOR, CRYPTOKI_VERSION_MINOR },  /* version */
+	mock_C_Initialize,
+	mock_C_Finalize,
+	mock_C_GetInfo,
+	mock_C_GetFunctionList,
+	mock_C_GetSlotList,
+	mock_C_GetSlotInfo,
+	mock_C_GetTokenInfo,
+	mock_C_GetMechanismList,
+	mock_C_GetMechanismInfo,
+	mock_C_InitToken__specific_args,
+	mock_C_InitPIN__specific_args,
+	mock_C_SetPIN__specific_args,
+	mock_C_OpenSession,
+	mock_C_CloseSession,
+	mock_C_CloseAllSessions,
+	mock_C_GetSessionInfo,
+	mock_C_GetOperationState,
+	mock_C_SetOperationState,
+	mock_C_Login,
+	mock_C_Logout,
+	mock_C_CreateObject,
+	mock_C_CopyObject,
+	mock_C_DestroyObject,
+	mock_C_GetObjectSize,
+	mock_C_GetAttributeValue,
+	mock_C_SetAttributeValue,
+	mock_C_FindObjectsInit,
+	mock_C_FindObjects,
+	mock_C_FindObjectsFinal,
+	mock_C_EncryptInit,
+	mock_C_Encrypt,
+	mock_C_EncryptUpdate,
+	mock_C_EncryptFinal,
+	mock_C_DecryptInit,
+	mock_C_Decrypt,
+	mock_C_DecryptUpdate,
+	mock_C_DecryptFinal,
+	mock_C_DigestInit,
+	mock_C_Digest,
+	mock_C_DigestUpdate,
+	mock_C_DigestKey,
+	mock_C_DigestFinal,
+	mock_C_SignInit,
+	mock_C_Sign,
+	mock_C_SignUpdate,
+	mock_C_SignFinal,
+	mock_C_SignRecoverInit,
+	mock_C_SignRecover,
+	mock_C_VerifyInit,
+	mock_C_Verify,
+	mock_C_VerifyUpdate,
+	mock_C_VerifyFinal,
+	mock_C_VerifyRecoverInit,
+	mock_C_VerifyRecover,
+	mock_C_DigestEncryptUpdate,
+	mock_C_DecryptDigestUpdate,
+	mock_C_SignEncryptUpdate,
+	mock_C_DecryptVerifyUpdate,
+	mock_C_GenerateKey,
+	mock_C_GenerateKeyPair,
+	mock_C_WrapKey,
+	mock_C_UnwrapKey,
+	mock_C_DeriveKey,
+	mock_C_SeedRandom,
+	mock_C_GenerateRandom,
+	mock_C_GetFunctionStatus,
+	mock_C_CancelFunction,
+	mock_C_WaitForSlotEvent,
 };
 
 void

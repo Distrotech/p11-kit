@@ -24,6 +24,8 @@ MODULE_SRCS = \
 	proxy.c \
 	private.h \
 	ptr-array.c ptr-array.h \
+	rpc-message.c rpc-message.h \
+	rpc-client.c rpc-server.c rpc.h \
 	messages.c \
 	uri.c \
 	util.c util.h \
@@ -84,7 +86,9 @@ endif
 
 libp11_kit_compat_la_SOURCES = \
 	debug.c debug.h \
+	hashmap.c hashmap.h \
 	messages.c \
+	ptr-array.c ptr-array.h \
 	util.c util.h \
 	$(top_srcdir)/common/compat.c \
 	$(top_srcdir)/common/compat.h

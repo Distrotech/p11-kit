@@ -53,8 +53,8 @@ test_init_uninit (CuTest *tc)
 	CuAssertIntEquals (tc, 0, buffer.buf.length);
 	CuAssertIntEquals (tc, 0, buffer.buf.flags);
 	CuAssertTrue (tc, buffer.allocated >= 10);
-	CuAssertPtrNotNull (tc, buffer.free);
-	CuAssertPtrNotNull (tc, buffer.realloc);
+	CuAssertPtrNotNull (tc, buffer.ffree);
+	CuAssertPtrNotNull (tc, buffer.frealloc);
 
 	CuAssertPtrEquals (tc, _p11_buffer_to_output (&buffer.buf), &buffer);
 
@@ -75,8 +75,8 @@ test_new_free (CuTest *tc)
 	CuAssertIntEquals (tc, 0, buf->length);
 	CuAssertIntEquals (tc, 0, buf->flags);
 	CuAssertTrue (tc, buffer->allocated == 0);
-	CuAssertPtrNotNull (tc, buffer->free);
-	CuAssertPtrNotNull (tc, buffer->realloc);
+	CuAssertPtrNotNull (tc, buffer->ffree);
+	CuAssertPtrNotNull (tc, buffer->frealloc);
 
 	p11_buffer_free (buf);
 }
@@ -136,8 +136,8 @@ test_init_for_data (CuTest *tc)
 	CuAssertIntEquals (tc, 4, buffer.buf.length);
 	CuAssertIntEquals (tc, 0, buffer.buf.flags);
 	CuAssertIntEquals (tc, 4, buffer.allocated);
-	CuAssertPtrEquals (tc, mock_free, buffer.free);
-	CuAssertPtrEquals (tc, mock_realloc, buffer.realloc);
+	CuAssertPtrEquals (tc, mock_free, buffer.ffree);
+	CuAssertPtrEquals (tc, mock_realloc, buffer.frealloc);
 
 	CuAssertIntEquals (tc, 0, mock_realloced);
 	CuAssertIntEquals (tc, 0, mock_freed);

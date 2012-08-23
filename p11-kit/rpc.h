@@ -45,4 +45,37 @@ int             p11_buffer_reset            (P11Buffer *buf,
 
 void            p11_buffer_free             (P11Buffer *buf);
 
+typedef struct _P11RpcClientVtable P11RpcClientVtable;
+
+struct _P11RpcClientVtable {
+	void *data;
+
+	CK_RV       (* connect)       (P11RpcClientVtable *vtable,
+	                               void *init_reserved);
+
+	CK_RV       (* transport)     (P11RpcClientVtable *vtable,
+	                               P11Buffer *request,
+	                               P11Buffer *response);
+
+	void        (* disconnect)    (P11RpcClientVtable *vtable,
+	                               void *fini_reserved);
+
+	void *reserved[16];
+};
+
+CK_FUNCTION_LIST_PTR   p11_rpc_client_register     (P11RpcClientVtable *vtable);
+
+typedef struct _P11RpcServerVtable P11RpcServerVtable;
+
+struct _P11RpcServerVtable {
+	void *data;
+
+	void *reserved[20];
+};
+
+int                    p11_rpc_server_handle       (P11RpcServerVtable *vtable,
+                                                    CK_FUNCTION_LIST_PTR module,
+                                                    P11Buffer *request,
+                                                    P11Buffer *response);
+
 #endif /* __P11_KIT_RPC_H__ */

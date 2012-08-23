@@ -21,24 +21,28 @@ CHECK_PROGS = \
 	pin-test \
 	test-init \
 	test-modules \
-	test-buffer
+	test-buffer \
+	test-rpc
 
 noinst_PROGRAMS = \
 	print-messages \
 	$(CHECK_PROGS)
 
 cutestfiles = cutest/CuTest.c cutest/CuTest.h
+mockfiles = mock-module.c mock-module.h
 
 conf_test_SOURCES = conf-test.c $(cutestfiles)
 hash_test_SOURCES = hash-test.c $(cutestfiles)
 pin_test_SOURCES = pin-test.c $(cutestfiles)
 ptr_array_test_SOURCES = ptr-array-test.c $(cutestfiles)
 progname_test_SOURCES = progname-test.c $(cutestfiles)
-test_init_SOURCES = test-init.c $(cutestfiles) \
-	mock-module.c mock-module.h
+test_init_SOURCES = test-init.c $(cutestfiles) $(mockfiles)
 test_init_CFLAGS = $(AM_CFLAGS)
 test_modules_SOURCES = test-modules.c $(cutestfiles)
 test_buffer_SOURCES = test-buffer.c $(cutestfiles)
+test_buffer_CFLAGS = $(AM_CFLAGS)
+test_rpc_SOURCES = test-rpc.c $(cutestfiles) $(mockfiles)
+test_rpc_CFLAGS = $(AM_CFLAGS)
 
 uri_test_SOURCES = uri-test.c $(cutestfiles)
 
@@ -54,6 +58,9 @@ mock_one_la_SOURCES = \
 	mock-module.c mock-module.h \
 	mock-module-ep.c
 
+mock_one_la_CFLAGS = \
+	$(AM_CFLAGS)
+
 mock_one_la_LIBADD = \
 	$(top_builddir)/p11-kit/libp11-kit-compat.la
 
@@ -62,10 +69,12 @@ mock_one_la_LDFLAGS = \
 	-no-undefined -export-symbols-regex 'C_GetFunctionList'
 
 mock_two_la_SOURCES = $(mock_one_la_SOURCES)
+mock_two_la_CFLAGS = $(mock_one_la_CFLAGS)
 mock_two_la_LDFLAGS = $(mock_one_la_LDFLAGS)
 mock_two_la_LIBADD = $(mock_one_la_LIBADD)
 
 mock_three_la_SOURCES = $(mock_one_la_SOURCES)
+mock_three_la_CFLAGS = $(mock_one_la_CFLAGS)
 mock_three_la_LDFLAGS = $(mock_one_la_LDFLAGS)
 mock_three_la_LIBADD = $(mock_one_la_LIBADD)
 
