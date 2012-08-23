@@ -56,7 +56,13 @@ test_get_info (CuTest *tc)
 
 	rv = (module->C_GetInfo) (&info);
 	CuAssertTrue (tc, rv == CKR_OK);
-	CuAssertTrue (tc, memcmp (&info, &MOCK_INFO, sizeof (CK_INFO)) == 0);
+	CuAssertIntEquals (tc, MOCK_INFO.cryptokiVersion.major, info.cryptokiVersion.major);
+	CuAssertIntEquals (tc, MOCK_INFO.cryptokiVersion.minor, info.cryptokiVersion.minor);
+	CuAssertTrue (tc, memcmp (MOCK_INFO.manufacturerID, info.manufacturerID, sizeof (info.manufacturerID)) == 0);
+	CuAssertIntEquals (tc, MOCK_INFO.flags, info.flags);
+	CuAssertTrue (tc, memcmp (MOCK_INFO.libraryDescription, info.libraryDescription, sizeof (info.libraryDescription)) == 0);
+	CuAssertIntEquals (tc, MOCK_INFO.libraryVersion.major, info.libraryVersion.major);
+	CuAssertIntEquals (tc, MOCK_INFO.libraryVersion.minor, info.libraryVersion.minor);
 
 	teardown_mock_module (tc, module);
 }
