@@ -36,11 +36,13 @@
 #include "config.h"
 
 #define P11_DEBUG_FLAG P11_DEBUG_PROXY
+#define CRYPTOKI_EXPORTS
+
 #include "debug.h"
 #include "dict.h"
 #include "library.h"
 #include "message.h"
-#define CRYPTOKI_EXPORTS
+#include "modules.h"
 #include "pkcs11.h"
 #include "p11-kit.h"
 #include "private.h"
@@ -80,6 +82,7 @@ static struct _Shared {
 	int mappings_refs;
 	p11_dict *sessions;
 	CK_ULONG last_handle;
+	CK_FUNCTION_LIST_PTR *modules;
 } gl = { NULL, 0, 0, NULL, FIRST_HANDLE };
 
 #define MANUFACTURER_ID         "PKCS#11 Kit                     "
@@ -200,7 +203,7 @@ _p11_kit_proxy_after_fork (void)
 static CK_RV
 proxy_C_Finalize (CK_VOID_PTR reserved)
 {
-	CK_RV rv;
+	CK_RV rv = CKR_OK;
 
 	p11_debug ("in");
 
@@ -213,7 +216,10 @@ proxy_C_Finalize (CK_VOID_PTR reserved)
 		p11_lock ();
 
 			/* WARNING: Reentrancy can occur here */
-			rv = _p11_kit_finalize_registered_unlocked_reentrant ();
+			p11_kit_modules_finalize (gl.modules);
+
+			if (gl.modules)
+				p11_modules_release_inlock_reentrant (gl.modules);
 
 			/*
 			 * If modules are all gone, then this was the last
@@ -232,7 +238,7 @@ proxy_C_Finalize (CK_VOID_PTR reserved)
 static CK_RV
 initialize_mappings_unlocked_reentrant (void)
 {
-	CK_FUNCTION_LIST_PTR *funcss, *f;
+	CK_FUNCTION_LIST_PTR *f;
 	CK_FUNCTION_LIST_PTR funcs;
 	Mapping *mappings = NULL;
 	int n_mappings = 0;
@@ -241,9 +247,9 @@ initialize_mappings_unlocked_reentrant (void)
 	CK_RV rv = CKR_OK;
 
 	assert (!gl.mappings);
+	assert (gl.modules != NULL);
 
-	funcss = _p11_kit_registered_modules_unlocked ();
-	for (f = funcss; *f; ++f) {
+	for (f = gl.modules; *f; ++f) {
 		funcs = *f;
 
 		assert (funcs);
@@ -281,8 +287,6 @@ initialize_mappings_unlocked_reentrant (void)
 		free (slots);
 	}
 
-	free (funcss);
-
 	/* Another thread raced us here due to above reentrancy */
 	if (gl.mappings) {
 		free (mappings);
@@ -312,8 +316,14 @@ proxy_C_Initialize (CK_VOID_PTR init_args)
 
 	p11_lock ();
 
+		rv = p11_modules_load_inlock_reentrant (0, &gl.modules);
+
 		/* WARNING: Reentrancy can occur here */
-		rv = _p11_kit_initialize_registered_unlocked_reentrant ();
+		if (rv == CKR_OK) {
+			p11_unlock ();
+			rv = p11_kit_modules_initialize (gl.modules, (p11_kit_destroyer) p11_kit_module_release);
+			p11_lock ();
+		}
 
 		/* WARNING: Reentrancy can occur here */
 		if (rv == CKR_OK && gl.mappings_refs == 0)
