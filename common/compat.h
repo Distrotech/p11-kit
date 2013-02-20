@@ -291,4 +291,11 @@ time_t      timegm          (struct tm *tm);
 
 #endif /* HAVE_TIMEGM */
 
+#ifndef HAVE_FDWALK
+
+int        fdwalk           (int (* cb) (void *data, int fd),
+                             void *data);
+
+#endif
+
 #endif /* __COMPAT_H__ */
