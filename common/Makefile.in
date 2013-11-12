@@ -80,11 +80,8 @@ POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
 DIST_COMMON = $(top_srcdir)/build/Makefile.decl $(srcdir)/Makefile.in \
-	$(srcdir)/Makefile.am $(top_srcdir)/depcomp $(inc_HEADERS)
-@WITH_ASN1_TRUE@am__append_1 = \
-@WITH_ASN1_TRUE@	libp11-data.la \
-@WITH_ASN1_TRUE@	$(NULL)
-
+	$(srcdir)/Makefile.am $(top_srcdir)/build/aux/depcomp \
+	$(inc_HEADERS)
 subdir = common
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/build/m4/gettext.m4 \
@@ -116,26 +113,15 @@ AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
 am__v_lt_0 = --silent
 am__v_lt_1 = 
-libp11_data_la_LIBADD =
-am__libp11_data_la_SOURCES_DIST = asn1.c asn1.h basic.asn basic.asn.h \
-	base64.c base64.h oid.c oid.h openssl.asn openssl.asn.h pem.c \
-	pem.h pkix.asn pkix.asn.h utf8.c utf8.h x509.c x509.h
-@WITH_ASN1_TRUE@am_libp11_data_la_OBJECTS = libp11_data_la-asn1.lo \
-@WITH_ASN1_TRUE@	libp11_data_la-base64.lo libp11_data_la-oid.lo \
-@WITH_ASN1_TRUE@	libp11_data_la-pem.lo libp11_data_la-utf8.lo \
-@WITH_ASN1_TRUE@	libp11_data_la-x509.lo $(am__objects_1)
-libp11_data_la_OBJECTS = $(am_libp11_data_la_OBJECTS)
-libp11_data_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
-	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CCLD) \
-	$(libp11_data_la_CFLAGS) $(CFLAGS) $(AM_LDFLAGS) $(LDFLAGS) -o \
-	$@
-@WITH_ASN1_TRUE@am_libp11_data_la_rpath =
 libp11_library_la_LIBADD =
 am_libp11_library_la_OBJECTS = library.lo $(am__objects_1)
 libp11_library_la_OBJECTS = $(am_libp11_library_la_OBJECTS)
 libp11_test_la_LIBADD =
 am_libp11_test_la_OBJECTS = mock.lo test.lo $(am__objects_1)
 libp11_test_la_OBJECTS = $(am_libp11_test_la_OBJECTS)
+libp11_tool_la_LIBADD =
+am_libp11_tool_la_OBJECTS = tool.lo $(am__objects_1)
+libp11_tool_la_OBJECTS = $(am_libp11_tool_la_OBJECTS)
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
 am__v_P_0 = false
@@ -149,7 +135,7 @@ am__v_at_ = $(am__v_at_@AM_DEFAULT_V@)
 am__v_at_0 = @
 am__v_at_1 = 
 DEFAULT_INCLUDES = -I.@am__isrc@ -I$(top_builddir)
-depcomp = $(SHELL) $(top_srcdir)/depcomp
+depcomp = $(SHELL) $(top_srcdir)/build/aux/depcomp
 am__depfiles_maybe = depfiles
 am__mv = mv -f
 COMPILE = $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) \
@@ -170,11 +156,11 @@ AM_V_CCLD = $(am__v_CCLD_@AM_V@)
 am__v_CCLD_ = $(am__v_CCLD_@AM_DEFAULT_V@)
 am__v_CCLD_0 = @echo "  CCLD    " $@;
 am__v_CCLD_1 = 
-SOURCES = $(libp11_common_la_SOURCES) $(libp11_data_la_SOURCES) \
-	$(libp11_library_la_SOURCES) $(libp11_test_la_SOURCES)
+SOURCES = $(libp11_common_la_SOURCES) $(libp11_library_la_SOURCES) \
+	$(libp11_test_la_SOURCES) $(libp11_tool_la_SOURCES)
 DIST_SOURCES = $(libp11_common_la_SOURCES) \
-	$(am__libp11_data_la_SOURCES_DIST) \
-	$(libp11_library_la_SOURCES) $(libp11_test_la_SOURCES)
+	$(libp11_library_la_SOURCES) $(libp11_test_la_SOURCES) \
+	$(libp11_tool_la_SOURCES)
 RECURSIVE_TARGETS = all-recursive check-recursive cscopelist-recursive \
 	ctags-recursive dvi-recursive html-recursive info-recursive \
 	install-data-recursive install-dvi-recursive \
@@ -306,6 +292,7 @@ GTKDOC_CHECK = @GTKDOC_CHECK@
 GTKDOC_MKPDF = @GTKDOC_MKPDF@
 GTKDOC_REBASE = @GTKDOC_REBASE@
 GTKDOC_SCAN = @GTKDOC_SCAN@
+HASH_LIBS = @HASH_LIBS@
 HTML_DIR = @HTML_DIR@
 INSTALL = @INSTALL@
 INSTALL_DATA = @INSTALL_DATA@
@@ -438,8 +425,13 @@ inc_HEADERS = \
 	pkcs11.h \
 	$(NULL)
 
-noinst_LTLIBRARIES = libp11-common.la libp11-library.la libp11-test.la \
-	$(NULL) $(am__append_1)
+noinst_LTLIBRARIES = \
+	libp11-common.la \
+	libp11-library.la \
+	libp11-test.la \
+	libp11-tool.la \
+	$(NULL)
+
 libp11_common_la_SOURCES = \
 	argv.c argv.h \
 	attrs.c attrs.h \
@@ -466,20 +458,9 @@ libp11_test_la_SOURCES = \
 	test.c test.h \
 	$(NULL)
 
-@WITH_ASN1_TRUE@libp11_data_la_SOURCES = \
-@WITH_ASN1_TRUE@	asn1.c asn1.h \
-@WITH_ASN1_TRUE@	basic.asn basic.asn.h \
-@WITH_ASN1_TRUE@	base64.c base64.h \
-@WITH_ASN1_TRUE@	oid.c oid.h \
-@WITH_ASN1_TRUE@	openssl.asn openssl.asn.h \
-@WITH_ASN1_TRUE@	pem.c pem.h \
-@WITH_ASN1_TRUE@	pkix.asn pkix.asn.h \
-@WITH_ASN1_TRUE@	utf8.c utf8.h \
-@WITH_ASN1_TRUE@	x509.c x509.h \
-@WITH_ASN1_TRUE@	$(NULL)
-
-@WITH_ASN1_TRUE@libp11_data_la_CFLAGS = \
-@WITH_ASN1_TRUE@	$(LIBTASN1_CFLAGS)
+libp11_tool_la_SOURCES = \
+	tool.c tool.h \
+	$(NULL)
 
 all: all-recursive
 
@@ -494,9 +475,9 @@ $(srcdir)/Makefile.in: @MAINTAINER_MODE_TRUE@ $(srcdir)/Makefile.am $(top_srcdir
 	      exit 1;; \
 	  esac; \
 	done; \
-	echo ' cd $(top_srcdir) && $(AUTOMAKE) --gnu common/Makefile'; \
+	echo ' cd $(top_srcdir) && $(AUTOMAKE) --foreign common/Makefile'; \
 	$(am__cd) $(top_srcdir) && \
-	  $(AUTOMAKE) --gnu common/Makefile
+	  $(AUTOMAKE) --foreign common/Makefile
 .PRECIOUS: Makefile
 Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
 	@case '$?' in \
@@ -531,14 +512,14 @@ clean-noinstLTLIBRARIES:
 libp11-common.la: $(libp11_common_la_OBJECTS) $(libp11_common_la_DEPENDENCIES) $(EXTRA_libp11_common_la_DEPENDENCIES) 
 	$(AM_V_CCLD)$(LINK)  $(libp11_common_la_OBJECTS) $(libp11_common_la_LIBADD) $(LIBS)
 
-libp11-data.la: $(libp11_data_la_OBJECTS) $(libp11_data_la_DEPENDENCIES) $(EXTRA_libp11_data_la_DEPENDENCIES) 
-	$(AM_V_CCLD)$(libp11_data_la_LINK) $(am_libp11_data_la_rpath) $(libp11_data_la_OBJECTS) $(libp11_data_la_LIBADD) $(LIBS)
-
 libp11-library.la: $(libp11_library_la_OBJECTS) $(libp11_library_la_DEPENDENCIES) $(EXTRA_libp11_library_la_DEPENDENCIES) 
 	$(AM_V_CCLD)$(LINK)  $(libp11_library_la_OBJECTS) $(libp11_library_la_LIBADD) $(LIBS)
 
 libp11-test.la: $(libp11_test_la_OBJECTS) $(libp11_test_la_DEPENDENCIES) $(EXTRA_libp11_test_la_DEPENDENCIES) 
 	$(AM_V_CCLD)$(LINK)  $(libp11_test_la_OBJECTS) $(libp11_test_la_LIBADD) $(LIBS)
+
+libp11-tool.la: $(libp11_tool_la_OBJECTS) $(libp11_tool_la_DEPENDENCIES) $(EXTRA_libp11_tool_la_DEPENDENCIES) 
+	$(AM_V_CCLD)$(LINK)  $(libp11_tool_la_OBJECTS) $(libp11_tool_la_LIBADD) $(LIBS)
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
@@ -556,17 +537,12 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/dict.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hash.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lexer.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libp11_data_la-asn1.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libp11_data_la-base64.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libp11_data_la-oid.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libp11_data_la-pem.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libp11_data_la-utf8.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libp11_data_la-x509.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/library.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/message.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/mock.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/path.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/test.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/tool.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/url.Plo@am__quote@
 
 .c.o:
@@ -589,48 +565,6 @@ distclean-compile:
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='$<' object='$@' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LTCOMPILE) -c -o $@ $<
-
-libp11_data_la-asn1.lo: asn1.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libp11_data_la_CFLAGS) $(CFLAGS) -MT libp11_data_la-asn1.lo -MD -MP -MF $(DEPDIR)/libp11_data_la-asn1.Tpo -c -o libp11_data_la-asn1.lo `test -f 'asn1.c' || echo '$(srcdir)/'`asn1.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libp11_data_la-asn1.Tpo $(DEPDIR)/libp11_data_la-asn1.Plo
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='asn1.c' object='libp11_data_la-asn1.lo' libtool=yes @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libp11_data_la_CFLAGS) $(CFLAGS) -c -o libp11_data_la-asn1.lo `test -f 'asn1.c' || echo '$(srcdir)/'`asn1.c
-
-libp11_data_la-base64.lo: base64.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libp11_data_la_CFLAGS) $(CFLAGS) -MT libp11_data_la-base64.lo -MD -MP -MF $(DEPDIR)/libp11_data_la-base64.Tpo -c -o libp11_data_la-base64.lo `test -f 'base64.c' || echo '$(srcdir)/'`base64.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libp11_data_la-base64.Tpo $(DEPDIR)/libp11_data_la-base64.Plo
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='base64.c' object='libp11_data_la-base64.lo' libtool=yes @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libp11_data_la_CFLAGS) $(CFLAGS) -c -o libp11_data_la-base64.lo `test -f 'base64.c' || echo '$(srcdir)/'`base64.c
-
-libp11_data_la-oid.lo: oid.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libp11_data_la_CFLAGS) $(CFLAGS) -MT libp11_data_la-oid.lo -MD -MP -MF $(DEPDIR)/libp11_data_la-oid.Tpo -c -o libp11_data_la-oid.lo `test -f 'oid.c' || echo '$(srcdir)/'`oid.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libp11_data_la-oid.Tpo $(DEPDIR)/libp11_data_la-oid.Plo
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='oid.c' object='libp11_data_la-oid.lo' libtool=yes @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libp11_data_la_CFLAGS) $(CFLAGS) -c -o libp11_data_la-oid.lo `test -f 'oid.c' || echo '$(srcdir)/'`oid.c
-
-libp11_data_la-pem.lo: pem.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libp11_data_la_CFLAGS) $(CFLAGS) -MT libp11_data_la-pem.lo -MD -MP -MF $(DEPDIR)/libp11_data_la-pem.Tpo -c -o libp11_data_la-pem.lo `test -f 'pem.c' || echo '$(srcdir)/'`pem.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libp11_data_la-pem.Tpo $(DEPDIR)/libp11_data_la-pem.Plo
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='pem.c' object='libp11_data_la-pem.lo' libtool=yes @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libp11_data_la_CFLAGS) $(CFLAGS) -c -o libp11_data_la-pem.lo `test -f 'pem.c' || echo '$(srcdir)/'`pem.c
-
-libp11_data_la-utf8.lo: utf8.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libp11_data_la_CFLAGS) $(CFLAGS) -MT libp11_data_la-utf8.lo -MD -MP -MF $(DEPDIR)/libp11_data_la-utf8.Tpo -c -o libp11_data_la-utf8.lo `test -f 'utf8.c' || echo '$(srcdir)/'`utf8.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libp11_data_la-utf8.Tpo $(DEPDIR)/libp11_data_la-utf8.Plo
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='utf8.c' object='libp11_data_la-utf8.lo' libtool=yes @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libp11_data_la_CFLAGS) $(CFLAGS) -c -o libp11_data_la-utf8.lo `test -f 'utf8.c' || echo '$(srcdir)/'`utf8.c
-
-libp11_data_la-x509.lo: x509.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libp11_data_la_CFLAGS) $(CFLAGS) -MT libp11_data_la-x509.lo -MD -MP -MF $(DEPDIR)/libp11_data_la-x509.Tpo -c -o libp11_data_la-x509.lo `test -f 'x509.c' || echo '$(srcdir)/'`x509.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libp11_data_la-x509.Tpo $(DEPDIR)/libp11_data_la-x509.Plo
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='x509.c' object='libp11_data_la-x509.lo' libtool=yes @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libp11_data_la_CFLAGS) $(CFLAGS) -c -o libp11_data_la-x509.lo `test -f 'x509.c' || echo '$(srcdir)/'`x509.c
 
 mostlyclean-libtool:
 	-rm -f *.lo
@@ -954,11 +888,6 @@ hellcheck:
 	@for dir in $(SUBDIRS); do \
 		test "$$dir" = "." || $(MAKE) -C $$dir hellcheck; \
 	done
-
-@WITH_ASN1_TRUE@asn:
-@WITH_ASN1_TRUE@	asn1Parser -o pkix.asn.h pkix.asn
-@WITH_ASN1_TRUE@	asn1Parser -o openssl.asn.h openssl.asn
-@WITH_ASN1_TRUE@	asn1Parser -o basic.asn.h basic.asn
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

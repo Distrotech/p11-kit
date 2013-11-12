@@ -79,37 +79,9 @@ POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
 DIST_COMMON = $(top_srcdir)/build/Makefile.tests $(srcdir)/Makefile.in \
-	$(srcdir)/Makefile.am $(top_srcdir)/depcomp \
-	$(top_srcdir)/test-driver
-noinst_PROGRAMS = $(am__EXEEXT_3) $(am__EXEEXT_4)
-@WITH_ASN1_TRUE@am__append_1 = \
-@WITH_ASN1_TRUE@	$(top_builddir)/common/libp11-data.la \
-@WITH_ASN1_TRUE@	$(LIBTASN1_LIBS) \
-@WITH_ASN1_TRUE@	$(NULL)
-
-@WITH_ASN1_TRUE@am__append_2 = \
-@WITH_ASN1_TRUE@	$(LIBTASN1_CFLAGS) \
-@WITH_ASN1_TRUE@	$(NULL)
-
-@WITH_ASN1_TRUE@am__append_3 = \
-@WITH_ASN1_TRUE@	test-asn1 \
-@WITH_ASN1_TRUE@	test-base64 \
-@WITH_ASN1_TRUE@	test-lexer \
-@WITH_ASN1_TRUE@	test-pem \
-@WITH_ASN1_TRUE@	test-oid \
-@WITH_ASN1_TRUE@	test-utf8 \
-@WITH_ASN1_TRUE@	test-x509 \
-@WITH_ASN1_TRUE@	$(NULL)
-
-@WITH_ASN1_TRUE@am__append_4 = \
-@WITH_ASN1_TRUE@	frob-cert \
-@WITH_ASN1_TRUE@	frob-ku \
-@WITH_ASN1_TRUE@	frob-eku \
-@WITH_ASN1_TRUE@	frob-cert \
-@WITH_ASN1_TRUE@	frob-oid \
-@WITH_ASN1_TRUE@	$(NULL)
-
-TESTS = $(am__EXEEXT_3)
+	$(srcdir)/Makefile.am $(top_srcdir)/build/aux/depcomp
+noinst_PROGRAMS = frob-getauxval$(EXEEXT) $(am__EXEEXT_2)
+TESTS = $(am__EXEEXT_2)
 subdir = common/tests
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/build/m4/gettext.m4 \
@@ -131,144 +103,93 @@ CONFIG_HEADER = $(top_builddir)/config.h
 CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 am__EXEEXT_1 =
-@WITH_ASN1_TRUE@am__EXEEXT_2 = test-asn1$(EXEEXT) test-base64$(EXEEXT) \
-@WITH_ASN1_TRUE@	test-lexer$(EXEEXT) test-pem$(EXEEXT) \
-@WITH_ASN1_TRUE@	test-oid$(EXEEXT) test-utf8$(EXEEXT) \
-@WITH_ASN1_TRUE@	test-x509$(EXEEXT) $(am__EXEEXT_1)
-am__EXEEXT_3 = test-compat$(EXEEXT) test-hash$(EXEEXT) \
-	test-dict$(EXEEXT) test-array$(EXEEXT) test-constants$(EXEEXT) \
-	test-attrs$(EXEEXT) test-buffer$(EXEEXT) test-url$(EXEEXT) \
-	test-path$(EXEEXT) $(am__EXEEXT_1) $(am__EXEEXT_2)
-@WITH_ASN1_TRUE@am__EXEEXT_4 = frob-cert$(EXEEXT) frob-ku$(EXEEXT) \
-@WITH_ASN1_TRUE@	frob-eku$(EXEEXT) frob-cert$(EXEEXT) \
-@WITH_ASN1_TRUE@	frob-oid$(EXEEXT) $(am__EXEEXT_1)
+am__EXEEXT_2 = test-tests$(EXEEXT) test-compat$(EXEEXT) \
+	test-hash$(EXEEXT) test-dict$(EXEEXT) test-array$(EXEEXT) \
+	test-constants$(EXEEXT) test-attrs$(EXEEXT) \
+	test-buffer$(EXEEXT) test-url$(EXEEXT) test-path$(EXEEXT) \
+	test-lexer$(EXEEXT) test-message$(EXEEXT) $(am__EXEEXT_1)
 PROGRAMS = $(noinst_PROGRAMS)
-frob_cert_SOURCES = frob-cert.c
-frob_cert_OBJECTS = frob-cert.$(OBJEXT)
-frob_cert_LDADD = $(LDADD)
+frob_getauxval_SOURCES = frob-getauxval.c
+frob_getauxval_OBJECTS = frob-getauxval.$(OBJEXT)
+frob_getauxval_LDADD = $(LDADD)
 am__DEPENDENCIES_1 =
-@WITH_ASN1_TRUE@am__DEPENDENCIES_2 =  \
-@WITH_ASN1_TRUE@	$(top_builddir)/common/libp11-data.la \
-@WITH_ASN1_TRUE@	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1)
-frob_cert_DEPENDENCIES = $(am__DEPENDENCIES_1) $(am__DEPENDENCIES_2) \
+frob_getauxval_DEPENDENCIES = $(am__DEPENDENCIES_1) \
 	$(top_builddir)/common/libp11-test.la \
 	$(top_builddir)/common/libp11-common.la
 AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
 am__v_lt_0 = --silent
 am__v_lt_1 = 
-frob_eku_SOURCES = frob-eku.c
-frob_eku_OBJECTS = frob-eku.$(OBJEXT)
-frob_eku_LDADD = $(LDADD)
-frob_eku_DEPENDENCIES = $(am__DEPENDENCIES_1) $(am__DEPENDENCIES_2) \
-	$(top_builddir)/common/libp11-test.la \
-	$(top_builddir)/common/libp11-common.la
-frob_ku_SOURCES = frob-ku.c
-frob_ku_OBJECTS = frob-ku.$(OBJEXT)
-frob_ku_LDADD = $(LDADD)
-frob_ku_DEPENDENCIES = $(am__DEPENDENCIES_1) $(am__DEPENDENCIES_2) \
-	$(top_builddir)/common/libp11-test.la \
-	$(top_builddir)/common/libp11-common.la
-frob_oid_SOURCES = frob-oid.c
-frob_oid_OBJECTS = frob-oid.$(OBJEXT)
-frob_oid_LDADD = $(LDADD)
-frob_oid_DEPENDENCIES = $(am__DEPENDENCIES_1) $(am__DEPENDENCIES_2) \
-	$(top_builddir)/common/libp11-test.la \
-	$(top_builddir)/common/libp11-common.la
 test_array_SOURCES = test-array.c
 test_array_OBJECTS = test-array.$(OBJEXT)
 test_array_LDADD = $(LDADD)
-test_array_DEPENDENCIES = $(am__DEPENDENCIES_1) $(am__DEPENDENCIES_2) \
-	$(top_builddir)/common/libp11-test.la \
-	$(top_builddir)/common/libp11-common.la
-test_asn1_SOURCES = test-asn1.c
-test_asn1_OBJECTS = test-asn1.$(OBJEXT)
-test_asn1_LDADD = $(LDADD)
-test_asn1_DEPENDENCIES = $(am__DEPENDENCIES_1) $(am__DEPENDENCIES_2) \
+test_array_DEPENDENCIES = $(am__DEPENDENCIES_1) \
 	$(top_builddir)/common/libp11-test.la \
 	$(top_builddir)/common/libp11-common.la
 test_attrs_SOURCES = test-attrs.c
 test_attrs_OBJECTS = test-attrs.$(OBJEXT)
 test_attrs_LDADD = $(LDADD)
-test_attrs_DEPENDENCIES = $(am__DEPENDENCIES_1) $(am__DEPENDENCIES_2) \
-	$(top_builddir)/common/libp11-test.la \
-	$(top_builddir)/common/libp11-common.la
-test_base64_SOURCES = test-base64.c
-test_base64_OBJECTS = test-base64.$(OBJEXT)
-test_base64_LDADD = $(LDADD)
-test_base64_DEPENDENCIES = $(am__DEPENDENCIES_1) $(am__DEPENDENCIES_2) \
+test_attrs_DEPENDENCIES = $(am__DEPENDENCIES_1) \
 	$(top_builddir)/common/libp11-test.la \
 	$(top_builddir)/common/libp11-common.la
 test_buffer_SOURCES = test-buffer.c
 test_buffer_OBJECTS = test-buffer.$(OBJEXT)
 test_buffer_LDADD = $(LDADD)
-test_buffer_DEPENDENCIES = $(am__DEPENDENCIES_1) $(am__DEPENDENCIES_2) \
+test_buffer_DEPENDENCIES = $(am__DEPENDENCIES_1) \
 	$(top_builddir)/common/libp11-test.la \
 	$(top_builddir)/common/libp11-common.la
 test_compat_SOURCES = test-compat.c
 test_compat_OBJECTS = test-compat.$(OBJEXT)
 test_compat_LDADD = $(LDADD)
-test_compat_DEPENDENCIES = $(am__DEPENDENCIES_1) $(am__DEPENDENCIES_2) \
+test_compat_DEPENDENCIES = $(am__DEPENDENCIES_1) \
 	$(top_builddir)/common/libp11-test.la \
 	$(top_builddir)/common/libp11-common.la
 test_constants_SOURCES = test-constants.c
 test_constants_OBJECTS = test-constants.$(OBJEXT)
 test_constants_LDADD = $(LDADD)
 test_constants_DEPENDENCIES = $(am__DEPENDENCIES_1) \
-	$(am__DEPENDENCIES_2) $(top_builddir)/common/libp11-test.la \
+	$(top_builddir)/common/libp11-test.la \
 	$(top_builddir)/common/libp11-common.la
 test_dict_SOURCES = test-dict.c
 test_dict_OBJECTS = test-dict.$(OBJEXT)
 test_dict_LDADD = $(LDADD)
-test_dict_DEPENDENCIES = $(am__DEPENDENCIES_1) $(am__DEPENDENCIES_2) \
+test_dict_DEPENDENCIES = $(am__DEPENDENCIES_1) \
 	$(top_builddir)/common/libp11-test.la \
 	$(top_builddir)/common/libp11-common.la
 test_hash_SOURCES = test-hash.c
 test_hash_OBJECTS = test-hash.$(OBJEXT)
 test_hash_LDADD = $(LDADD)
-test_hash_DEPENDENCIES = $(am__DEPENDENCIES_1) $(am__DEPENDENCIES_2) \
+test_hash_DEPENDENCIES = $(am__DEPENDENCIES_1) \
 	$(top_builddir)/common/libp11-test.la \
 	$(top_builddir)/common/libp11-common.la
 test_lexer_SOURCES = test-lexer.c
 test_lexer_OBJECTS = test-lexer.$(OBJEXT)
 test_lexer_LDADD = $(LDADD)
-test_lexer_DEPENDENCIES = $(am__DEPENDENCIES_1) $(am__DEPENDENCIES_2) \
+test_lexer_DEPENDENCIES = $(am__DEPENDENCIES_1) \
 	$(top_builddir)/common/libp11-test.la \
 	$(top_builddir)/common/libp11-common.la
-test_oid_SOURCES = test-oid.c
-test_oid_OBJECTS = test-oid.$(OBJEXT)
-test_oid_LDADD = $(LDADD)
-test_oid_DEPENDENCIES = $(am__DEPENDENCIES_1) $(am__DEPENDENCIES_2) \
+test_message_SOURCES = test-message.c
+test_message_OBJECTS = test-message.$(OBJEXT)
+test_message_LDADD = $(LDADD)
+test_message_DEPENDENCIES = $(am__DEPENDENCIES_1) \
 	$(top_builddir)/common/libp11-test.la \
 	$(top_builddir)/common/libp11-common.la
 test_path_SOURCES = test-path.c
 test_path_OBJECTS = test-path.$(OBJEXT)
 test_path_LDADD = $(LDADD)
-test_path_DEPENDENCIES = $(am__DEPENDENCIES_1) $(am__DEPENDENCIES_2) \
+test_path_DEPENDENCIES = $(am__DEPENDENCIES_1) \
 	$(top_builddir)/common/libp11-test.la \
 	$(top_builddir)/common/libp11-common.la
-test_pem_SOURCES = test-pem.c
-test_pem_OBJECTS = test-pem.$(OBJEXT)
-test_pem_LDADD = $(LDADD)
-test_pem_DEPENDENCIES = $(am__DEPENDENCIES_1) $(am__DEPENDENCIES_2) \
+test_tests_SOURCES = test-tests.c
+test_tests_OBJECTS = test-tests.$(OBJEXT)
+test_tests_LDADD = $(LDADD)
+test_tests_DEPENDENCIES = $(am__DEPENDENCIES_1) \
 	$(top_builddir)/common/libp11-test.la \
 	$(top_builddir)/common/libp11-common.la
 test_url_SOURCES = test-url.c
 test_url_OBJECTS = test-url.$(OBJEXT)
 test_url_LDADD = $(LDADD)
-test_url_DEPENDENCIES = $(am__DEPENDENCIES_1) $(am__DEPENDENCIES_2) \
-	$(top_builddir)/common/libp11-test.la \
-	$(top_builddir)/common/libp11-common.la
-test_utf8_SOURCES = test-utf8.c
-test_utf8_OBJECTS = test-utf8.$(OBJEXT)
-test_utf8_LDADD = $(LDADD)
-test_utf8_DEPENDENCIES = $(am__DEPENDENCIES_1) $(am__DEPENDENCIES_2) \
-	$(top_builddir)/common/libp11-test.la \
-	$(top_builddir)/common/libp11-common.la
-test_x509_SOURCES = test-x509.c
-test_x509_OBJECTS = test-x509.$(OBJEXT)
-test_x509_LDADD = $(LDADD)
-test_x509_DEPENDENCIES = $(am__DEPENDENCIES_1) $(am__DEPENDENCIES_2) \
+test_url_DEPENDENCIES = $(am__DEPENDENCIES_1) \
 	$(top_builddir)/common/libp11-test.la \
 	$(top_builddir)/common/libp11-common.la
 AM_V_P = $(am__v_P_@AM_V@)
@@ -284,7 +205,7 @@ am__v_at_ = $(am__v_at_@AM_DEFAULT_V@)
 am__v_at_0 = @
 am__v_at_1 = 
 DEFAULT_INCLUDES = -I.@am__isrc@ -I$(top_builddir)
-depcomp = $(SHELL) $(top_srcdir)/depcomp
+depcomp = $(SHELL) $(top_srcdir)/build/aux/depcomp
 am__depfiles_maybe = depfiles
 am__mv = mv -f
 COMPILE = $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) \
@@ -305,16 +226,14 @@ AM_V_CCLD = $(am__v_CCLD_@AM_V@)
 am__v_CCLD_ = $(am__v_CCLD_@AM_DEFAULT_V@)
 am__v_CCLD_0 = @echo "  CCLD    " $@;
 am__v_CCLD_1 = 
-SOURCES = frob-cert.c frob-eku.c frob-ku.c frob-oid.c test-array.c \
-	test-asn1.c test-attrs.c test-base64.c test-buffer.c \
+SOURCES = frob-getauxval.c test-array.c test-attrs.c test-buffer.c \
 	test-compat.c test-constants.c test-dict.c test-hash.c \
-	test-lexer.c test-oid.c test-path.c test-pem.c test-url.c \
-	test-utf8.c test-x509.c
-DIST_SOURCES = frob-cert.c frob-eku.c frob-ku.c frob-oid.c \
-	test-array.c test-asn1.c test-attrs.c test-base64.c \
+	test-lexer.c test-message.c test-path.c test-tests.c \
+	test-url.c
+DIST_SOURCES = frob-getauxval.c test-array.c test-attrs.c \
 	test-buffer.c test-compat.c test-constants.c test-dict.c \
-	test-hash.c test-lexer.c test-oid.c test-path.c test-pem.c \
-	test-url.c test-utf8.c test-x509.c
+	test-hash.c test-lexer.c test-message.c test-path.c \
+	test-tests.c test-url.c
 am__can_run_installinfo = \
   case $$AM_UPDATE_INFO_DIR in \
     n|no|NO) false;; \
@@ -361,188 +280,6 @@ am__tty_colors = { \
     std='[m'; \
   fi; \
 }
-am__vpath_adj_setup = srcdirstrip=`echo "$(srcdir)" | sed 's|.|.|g'`;
-am__vpath_adj = case $$p in \
-    $(srcdir)/*) f=`echo "$$p" | sed "s|^$$srcdirstrip/||"`;; \
-    *) f=$$p;; \
-  esac;
-am__strip_dir = f=`echo $$p | sed -e 's|^.*/||'`;
-am__install_max = 40
-am__nobase_strip_setup = \
-  srcdirstrip=`echo "$(srcdir)" | sed 's/[].[^$$\\*|]/\\\\&/g'`
-am__nobase_strip = \
-  for p in $$list; do echo "$$p"; done | sed -e "s|$$srcdirstrip/||"
-am__nobase_list = $(am__nobase_strip_setup); \
-  for p in $$list; do echo "$$p $$p"; done | \
-  sed "s| $$srcdirstrip/| |;"' / .*\//!s/ .*/ ./; s,\( .*\)/[^/]*$$,\1,' | \
-  $(AWK) 'BEGIN { files["."] = "" } { files[$$2] = files[$$2] " " $$1; \
-    if (++n[$$2] == $(am__install_max)) \
-      { print $$2, files[$$2]; n[$$2] = 0; files[$$2] = "" } } \
-    END { for (dir in files) print dir, files[dir] }'
-am__base_list = \
-  sed '$$!N;$$!N;$$!N;$$!N;$$!N;$$!N;$$!N;s/\n/ /g' | \
-  sed '$$!N;$$!N;$$!N;$$!N;s/\n/ /g'
-am__uninstall_files_from_dir = { \
-  test -z "$$files" \
-    || { test ! -d "$$dir" && test ! -f "$$dir" && test ! -r "$$dir"; } \
-    || { echo " ( cd '$$dir' && rm -f" $$files ")"; \
-         $(am__cd) "$$dir" && rm -f $$files; }; \
-  }
-am__recheck_rx = ^[ 	]*:recheck:[ 	]*
-am__global_test_result_rx = ^[ 	]*:global-test-result:[ 	]*
-am__copy_in_global_log_rx = ^[ 	]*:copy-in-global-log:[ 	]*
-# A command that, given a newline-separated list of test names on the
-# standard input, print the name of the tests that are to be re-run
-# upon "make recheck".
-am__list_recheck_tests = $(AWK) '{ \
-  recheck = 1; \
-  while ((rc = (getline line < ($$0 ".trs"))) != 0) \
-    { \
-      if (rc < 0) \
-        { \
-          if ((getline line2 < ($$0 ".log")) < 0) \
-	    recheck = 0; \
-          break; \
-        } \
-      else if (line ~ /$(am__recheck_rx)[nN][Oo]/) \
-        { \
-          recheck = 0; \
-          break; \
-        } \
-      else if (line ~ /$(am__recheck_rx)[yY][eE][sS]/) \
-        { \
-          break; \
-        } \
-    }; \
-  if (recheck) \
-    print $$0; \
-  close ($$0 ".trs"); \
-  close ($$0 ".log"); \
-}'
-# A command that, given a newline-separated list of test names on the
-# standard input, create the global log from their .trs and .log files.
-am__create_global_log = $(AWK) ' \
-function fatal(msg) \
-{ \
-  print "fatal: making $@: " msg | "cat >&2"; \
-  exit 1; \
-} \
-function rst_section(header) \
-{ \
-  print header; \
-  len = length(header); \
-  for (i = 1; i <= len; i = i + 1) \
-    printf "="; \
-  printf "\n\n"; \
-} \
-{ \
-  copy_in_global_log = 1; \
-  global_test_result = "RUN"; \
-  while ((rc = (getline line < ($$0 ".trs"))) != 0) \
-    { \
-      if (rc < 0) \
-         fatal("failed to read from " $$0 ".trs"); \
-      if (line ~ /$(am__global_test_result_rx)/) \
-        { \
-          sub("$(am__global_test_result_rx)", "", line); \
-          sub("[ 	]*$$", "", line); \
-          global_test_result = line; \
-        } \
-      else if (line ~ /$(am__copy_in_global_log_rx)[nN][oO]/) \
-        copy_in_global_log = 0; \
-    }; \
-  if (copy_in_global_log) \
-    { \
-      rst_section(global_test_result ": " $$0); \
-      while ((rc = (getline line < ($$0 ".log"))) != 0) \
-      { \
-        if (rc < 0) \
-          fatal("failed to read from " $$0 ".log"); \
-        print line; \
-      }; \
-      printf "\n"; \
-    }; \
-  close ($$0 ".trs"); \
-  close ($$0 ".log"); \
-}'
-# Restructured Text title.
-am__rst_title = { sed 's/.*/   &   /;h;s/./=/g;p;x;s/ *$$//;p;g' && echo; }
-# Solaris 10 'make', and several other traditional 'make' implementations,
-# pass "-e" to $(SHELL), and POSIX 2008 even requires this.  Work around it
-# by disabling -e (using the XSI extension "set +e") if it's set.
-am__sh_e_setup = case $$- in *e*) set +e;; esac
-# Default flags passed to test drivers.
-am__common_driver_flags = \
-  --color-tests "$$am__color_tests" \
-  --enable-hard-errors "$$am__enable_hard_errors" \
-  --expect-failure "$$am__expect_failure"
-# To be inserted before the command running the test.  Creates the
-# directory for the log if needed.  Stores in $dir the directory
-# containing $f, in $tst the test, in $log the log.  Executes the
-# developer- defined test setup AM_TESTS_ENVIRONMENT (if any), and
-# passes TESTS_ENVIRONMENT.  Set up options for the wrapper that
-# will run the test scripts (or their associated LOG_COMPILER, if
-# thy have one).
-am__check_pre = \
-$(am__sh_e_setup);					\
-$(am__vpath_adj_setup) $(am__vpath_adj)			\
-$(am__tty_colors);					\
-srcdir=$(srcdir); export srcdir;			\
-case "$@" in						\
-  */*) am__odir=`echo "./$@" | sed 's|/[^/]*$$||'`;;	\
-    *) am__odir=.;; 					\
-esac;							\
-test "x$$am__odir" = x"." || test -d "$$am__odir" 	\
-  || $(MKDIR_P) "$$am__odir" || exit $$?;		\
-if test -f "./$$f"; then dir=./;			\
-elif test -f "$$f"; then dir=;				\
-else dir="$(srcdir)/"; fi;				\
-tst=$$dir$$f; log='$@'; 				\
-if test -n '$(DISABLE_HARD_ERRORS)'; then		\
-  am__enable_hard_errors=no; 				\
-else							\
-  am__enable_hard_errors=yes; 				\
-fi; 							\
-case " $(XFAIL_TESTS) " in				\
-  *[\ \	]$$f[\ \	]* | *[\ \	]$$dir$$f[\ \	]*) \
-    am__expect_failure=yes;;				\
-  *)							\
-    am__expect_failure=no;;				\
-esac; 							\
-$(AM_TESTS_ENVIRONMENT) $(TESTS_ENVIRONMENT)
-# A shell command to get the names of the tests scripts with any registered
-# extension removed (i.e., equivalently, the names of the test logs, with
-# the '.log' extension removed).  The result is saved in the shell variable
-# '$bases'.  This honors runtime overriding of TESTS and TEST_LOGS.  Sadly,
-# we cannot use something simpler, involving e.g., "$(TEST_LOGS:.log=)",
-# since that might cause problem with VPATH rewrites for suffix-less tests.
-# See also 'test-harness-vpath-rewrite.sh' and 'test-trs-basic.sh'.
-am__set_TESTS_bases = \
-  bases='$(TEST_LOGS)'; \
-  bases=`for i in $$bases; do echo $$i; done | sed 's/\.log$$//'`; \
-  bases=`echo $$bases`
-RECHECK_LOGS = $(TEST_LOGS)
-AM_RECURSIVE_TARGETS = check recheck
-TEST_SUITE_LOG = test-suite.log
-TEST_EXTENSIONS = @EXEEXT@ .test
-LOG_DRIVER = $(SHELL) $(top_srcdir)/test-driver
-LOG_COMPILE = $(LOG_COMPILER) $(AM_LOG_FLAGS) $(LOG_FLAGS)
-am__set_b = \
-  case '$@' in \
-    */*) \
-      case '$*' in \
-        */*) b='$*';; \
-          *) b=`echo '$@' | sed 's/\.log$$//'`; \
-       esac;; \
-    *) \
-      b='$*';; \
-  esac
-am__test_logs1 = $(TESTS:=.log)
-am__test_logs2 = $(am__test_logs1:@EXEEXT@.log=.log)
-TEST_LOGS = $(am__test_logs2:.test.log=.log)
-TEST_LOG_DRIVER = $(SHELL) $(top_srcdir)/test-driver
-TEST_LOG_COMPILE = $(TEST_LOG_COMPILER) $(AM_TEST_LOG_FLAGS) \
-	$(TEST_LOG_FLAGS)
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
 ACLOCAL = @ACLOCAL@
 AMTAR = @AMTAR@
@@ -579,6 +316,7 @@ GTKDOC_CHECK = @GTKDOC_CHECK@
 GTKDOC_MKPDF = @GTKDOC_MKPDF@
 GTKDOC_REBASE = @GTKDOC_REBASE@
 GTKDOC_SCAN = @GTKDOC_SCAN@
+HASH_LIBS = @HASH_LIBS@
 HTML_DIR = @HTML_DIR@
 INSTALL = @INSTALL@
 INSTALL_DATA = @INSTALL_DATA@
@@ -710,21 +448,38 @@ TEST_CFLAGS = \
 	-DBUILDDIR=\"$(abs_builddir)\" \
 	-DP11_KIT_FUTURE_UNSTABLE_API
 
-MEMCHECK_ENV = $(TEST_RUNNER) valgrind --error-exitcode=80 --quiet --trace-children=yes
+MEMCHECK_ENV = $(TEST_RUNNER) valgrind --error-exitcode=80 --quiet
 LEAKCHECK_ENV = $(TEST_RUNNER) valgrind --error-exitcode=81 --quiet --leak-check=yes
 HELLCHECK_ENV = $(TEST_RUNNER) valgrind --error-exitcode=82 --quiet --tool=helgrind
 COMMON = $(top_srcdir)/common
-AM_CPPFLAGS = -I$(top_srcdir) -I$(srcdir)/.. -I$(COMMON) \
-	$(TEST_CFLAGS) $(am__append_2)
-LDADD = $(NULL) $(am__append_1) $(top_builddir)/common/libp11-test.la \
-	$(top_builddir)/common/libp11-common.la $(CUTEST_LIBS)
-CHECK_PROGS = test-compat test-hash test-dict test-array \
-	test-constants test-attrs test-buffer test-url test-path \
-	$(NULL) $(am__append_3)
+AM_CPPFLAGS = \
+	-I$(top_srcdir) \
+	-I$(srcdir)/.. \
+	-I$(COMMON) \
+	-DBUILDDIR=\"$(abs_builddir)\" \
+	$(TEST_CFLAGS)
+
+LDADD = $(NULL) $(top_builddir)/common/libp11-test.la \
+	$(top_builddir)/common/libp11-common.la
+CHECK_PROGS = \
+	test-tests \
+	test-compat \
+	test-hash \
+	test-dict \
+	test-array \
+	test-constants \
+	test-attrs \
+	test-buffer \
+	test-url \
+	test-path \
+	test-lexer \
+	test-message \
+	$(NULL)
+
 all: all-am
 
 .SUFFIXES:
-.SUFFIXES: .c .lo .log .o .obj .test .test$(EXEEXT) .trs
+.SUFFIXES: .c .lo .o .obj
 $(srcdir)/Makefile.in: @MAINTAINER_MODE_TRUE@ $(srcdir)/Makefile.am $(top_srcdir)/build/Makefile.tests $(am__configure_deps)
 	@for dep in $?; do \
 	  case '$(am__configure_deps)' in \
@@ -734,9 +489,9 @@ $(srcdir)/Makefile.in: @MAINTAINER_MODE_TRUE@ $(srcdir)/Makefile.am $(top_srcdir
 	      exit 1;; \
 	  esac; \
 	done; \
-	echo ' cd $(top_srcdir) && $(AUTOMAKE) --gnu common/tests/Makefile'; \
+	echo ' cd $(top_srcdir) && $(AUTOMAKE) --foreign common/tests/Makefile'; \
 	$(am__cd) $(top_srcdir) && \
-	  $(AUTOMAKE) --gnu common/tests/Makefile
+	  $(AUTOMAKE) --foreign common/tests/Makefile
 .PRECIOUS: Makefile
 Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
 	@case '$?' in \
@@ -766,37 +521,17 @@ clean-noinstPROGRAMS:
 	echo " rm -f" $$list; \
 	rm -f $$list
 
-frob-cert$(EXEEXT): $(frob_cert_OBJECTS) $(frob_cert_DEPENDENCIES) $(EXTRA_frob_cert_DEPENDENCIES) 
-	@rm -f frob-cert$(EXEEXT)
-	$(AM_V_CCLD)$(LINK) $(frob_cert_OBJECTS) $(frob_cert_LDADD) $(LIBS)
-
-frob-eku$(EXEEXT): $(frob_eku_OBJECTS) $(frob_eku_DEPENDENCIES) $(EXTRA_frob_eku_DEPENDENCIES) 
-	@rm -f frob-eku$(EXEEXT)
-	$(AM_V_CCLD)$(LINK) $(frob_eku_OBJECTS) $(frob_eku_LDADD) $(LIBS)
-
-frob-ku$(EXEEXT): $(frob_ku_OBJECTS) $(frob_ku_DEPENDENCIES) $(EXTRA_frob_ku_DEPENDENCIES) 
-	@rm -f frob-ku$(EXEEXT)
-	$(AM_V_CCLD)$(LINK) $(frob_ku_OBJECTS) $(frob_ku_LDADD) $(LIBS)
-
-frob-oid$(EXEEXT): $(frob_oid_OBJECTS) $(frob_oid_DEPENDENCIES) $(EXTRA_frob_oid_DEPENDENCIES) 
-	@rm -f frob-oid$(EXEEXT)
-	$(AM_V_CCLD)$(LINK) $(frob_oid_OBJECTS) $(frob_oid_LDADD) $(LIBS)
+frob-getauxval$(EXEEXT): $(frob_getauxval_OBJECTS) $(frob_getauxval_DEPENDENCIES) $(EXTRA_frob_getauxval_DEPENDENCIES) 
+	@rm -f frob-getauxval$(EXEEXT)
+	$(AM_V_CCLD)$(LINK) $(frob_getauxval_OBJECTS) $(frob_getauxval_LDADD) $(LIBS)
 
 test-array$(EXEEXT): $(test_array_OBJECTS) $(test_array_DEPENDENCIES) $(EXTRA_test_array_DEPENDENCIES) 
 	@rm -f test-array$(EXEEXT)
 	$(AM_V_CCLD)$(LINK) $(test_array_OBJECTS) $(test_array_LDADD) $(LIBS)
 
-test-asn1$(EXEEXT): $(test_asn1_OBJECTS) $(test_asn1_DEPENDENCIES) $(EXTRA_test_asn1_DEPENDENCIES) 
-	@rm -f test-asn1$(EXEEXT)
-	$(AM_V_CCLD)$(LINK) $(test_asn1_OBJECTS) $(test_asn1_LDADD) $(LIBS)
-
 test-attrs$(EXEEXT): $(test_attrs_OBJECTS) $(test_attrs_DEPENDENCIES) $(EXTRA_test_attrs_DEPENDENCIES) 
 	@rm -f test-attrs$(EXEEXT)
 	$(AM_V_CCLD)$(LINK) $(test_attrs_OBJECTS) $(test_attrs_LDADD) $(LIBS)
-
-test-base64$(EXEEXT): $(test_base64_OBJECTS) $(test_base64_DEPENDENCIES) $(EXTRA_test_base64_DEPENDENCIES) 
-	@rm -f test-base64$(EXEEXT)
-	$(AM_V_CCLD)$(LINK) $(test_base64_OBJECTS) $(test_base64_LDADD) $(LIBS)
 
 test-buffer$(EXEEXT): $(test_buffer_OBJECTS) $(test_buffer_DEPENDENCIES) $(EXTRA_test_buffer_DEPENDENCIES) 
 	@rm -f test-buffer$(EXEEXT)
@@ -822,29 +557,21 @@ test-lexer$(EXEEXT): $(test_lexer_OBJECTS) $(test_lexer_DEPENDENCIES) $(EXTRA_te
 	@rm -f test-lexer$(EXEEXT)
 	$(AM_V_CCLD)$(LINK) $(test_lexer_OBJECTS) $(test_lexer_LDADD) $(LIBS)
 
-test-oid$(EXEEXT): $(test_oid_OBJECTS) $(test_oid_DEPENDENCIES) $(EXTRA_test_oid_DEPENDENCIES) 
-	@rm -f test-oid$(EXEEXT)
-	$(AM_V_CCLD)$(LINK) $(test_oid_OBJECTS) $(test_oid_LDADD) $(LIBS)
+test-message$(EXEEXT): $(test_message_OBJECTS) $(test_message_DEPENDENCIES) $(EXTRA_test_message_DEPENDENCIES) 
+	@rm -f test-message$(EXEEXT)
+	$(AM_V_CCLD)$(LINK) $(test_message_OBJECTS) $(test_message_LDADD) $(LIBS)
 
 test-path$(EXEEXT): $(test_path_OBJECTS) $(test_path_DEPENDENCIES) $(EXTRA_test_path_DEPENDENCIES) 
 	@rm -f test-path$(EXEEXT)
 	$(AM_V_CCLD)$(LINK) $(test_path_OBJECTS) $(test_path_LDADD) $(LIBS)
 
-test-pem$(EXEEXT): $(test_pem_OBJECTS) $(test_pem_DEPENDENCIES) $(EXTRA_test_pem_DEPENDENCIES) 
-	@rm -f test-pem$(EXEEXT)
-	$(AM_V_CCLD)$(LINK) $(test_pem_OBJECTS) $(test_pem_LDADD) $(LIBS)
+test-tests$(EXEEXT): $(test_tests_OBJECTS) $(test_tests_DEPENDENCIES) $(EXTRA_test_tests_DEPENDENCIES) 
+	@rm -f test-tests$(EXEEXT)
+	$(AM_V_CCLD)$(LINK) $(test_tests_OBJECTS) $(test_tests_LDADD) $(LIBS)
 
 test-url$(EXEEXT): $(test_url_OBJECTS) $(test_url_DEPENDENCIES) $(EXTRA_test_url_DEPENDENCIES) 
 	@rm -f test-url$(EXEEXT)
 	$(AM_V_CCLD)$(LINK) $(test_url_OBJECTS) $(test_url_LDADD) $(LIBS)
-
-test-utf8$(EXEEXT): $(test_utf8_OBJECTS) $(test_utf8_DEPENDENCIES) $(EXTRA_test_utf8_DEPENDENCIES) 
-	@rm -f test-utf8$(EXEEXT)
-	$(AM_V_CCLD)$(LINK) $(test_utf8_OBJECTS) $(test_utf8_LDADD) $(LIBS)
-
-test-x509$(EXEEXT): $(test_x509_OBJECTS) $(test_x509_DEPENDENCIES) $(EXTRA_test_x509_DEPENDENCIES) 
-	@rm -f test-x509$(EXEEXT)
-	$(AM_V_CCLD)$(LINK) $(test_x509_OBJECTS) $(test_x509_LDADD) $(LIBS)
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
@@ -852,26 +579,19 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/frob-cert.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/frob-eku.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/frob-ku.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/frob-oid.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/frob-getauxval.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/test-array.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/test-asn1.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/test-attrs.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/test-base64.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/test-buffer.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/test-compat.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/test-constants.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/test-dict.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/test-hash.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/test-lexer.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/test-oid.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/test-message.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/test-path.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/test-pem.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/test-tests.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/test-url.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/test-utf8.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/test-x509.Po@am__quote@
 
 .c.o:
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<
@@ -952,273 +672,98 @@ cscopelist-am: $(am__tagged_files)
 distclean-tags:
 	-rm -f TAGS ID GTAGS GRTAGS GSYMS GPATH tags
 
-# Recover from deleted '.trs' file; this should ensure that
-# "rm -f foo.log; make foo.trs" re-run 'foo.test', and re-create
-# both 'foo.log' and 'foo.trs'.  Break the recipe in two subshells
-# to avoid problems with "make -n".
-.log.trs:
-	rm -f $< $@
-	$(MAKE) $(AM_MAKEFLAGS) $<
-
-# Leading 'am--fnord' is there to ensure the list of targets does not
-# expand to empty, as could happen e.g. with make check TESTS=''.
-am--fnord $(TEST_LOGS) $(TEST_LOGS:.log=.trs): $(am__force_recheck)
-am--force-recheck:
-	@:
-
-$(TEST_SUITE_LOG): $(TEST_LOGS)
-	@$(am__set_TESTS_bases); \
-	am__f_ok () { test -f "$$1" && test -r "$$1"; }; \
-	redo_bases=`for i in $$bases; do \
-	              am__f_ok $$i.trs && am__f_ok $$i.log || echo $$i; \
-	            done`; \
-	if test -n "$$redo_bases"; then \
-	  redo_logs=`for i in $$redo_bases; do echo $$i.log; done`; \
-	  redo_results=`for i in $$redo_bases; do echo $$i.trs; done`; \
-	  if $(am__make_dryrun); then :; else \
-	    rm -f $$redo_logs && rm -f $$redo_results || exit 1; \
-	  fi; \
-	fi; \
-	if test -n "$$am__remaking_logs"; then \
-	  echo "fatal: making $(TEST_SUITE_LOG): possible infinite" \
-	       "recursion detected" >&2; \
-	else \
-	  am__remaking_logs=yes $(MAKE) $(AM_MAKEFLAGS) $$redo_logs; \
-	fi; \
-	if $(am__make_dryrun); then :; else \
-	  st=0;  \
-	  errmsg="fatal: making $(TEST_SUITE_LOG): failed to create"; \
-	  for i in $$redo_bases; do \
-	    test -f $$i.trs && test -r $$i.trs \
-	      || { echo "$$errmsg $$i.trs" >&2; st=1; }; \
-	    test -f $$i.log && test -r $$i.log \
-	      || { echo "$$errmsg $$i.log" >&2; st=1; }; \
+check-TESTS: $(TESTS)
+	@failed=0; all=0; xfail=0; xpass=0; skip=0; \
+	srcdir=$(srcdir); export srcdir; \
+	list=' $(TESTS) '; \
+	$(am__tty_colors); \
+	if test -n "$$list"; then \
+	  for tst in $$list; do \
+	    if test -f ./$$tst; then dir=./; \
+	    elif test -f $$tst; then dir=; \
+	    else dir="$(srcdir)/"; fi; \
+	    if $(TESTS_ENVIRONMENT) $${dir}$$tst $(AM_TESTS_FD_REDIRECT); then \
+	      all=`expr $$all + 1`; \
+	      case " $(XFAIL_TESTS) " in \
+	      *[\ \	]$$tst[\ \	]*) \
+		xpass=`expr $$xpass + 1`; \
+		failed=`expr $$failed + 1`; \
+		col=$$red; res=XPASS; \
+	      ;; \
+	      *) \
+		col=$$grn; res=PASS; \
+	      ;; \
+	      esac; \
+	    elif test $$? -ne 77; then \
+	      all=`expr $$all + 1`; \
+	      case " $(XFAIL_TESTS) " in \
+	      *[\ \	]$$tst[\ \	]*) \
+		xfail=`expr $$xfail + 1`; \
+		col=$$lgn; res=XFAIL; \
+	      ;; \
+	      *) \
+		failed=`expr $$failed + 1`; \
+		col=$$red; res=FAIL; \
+	      ;; \
+	      esac; \
+	    else \
+	      skip=`expr $$skip + 1`; \
+	      col=$$blu; res=SKIP; \
+	    fi; \
+	    echo "$${col}$$res$${std}: $$tst"; \
 	  done; \
-	  test $$st -eq 0 || exit 1; \
-	fi
-	@$(am__sh_e_setup); $(am__tty_colors); $(am__set_TESTS_bases); \
-	ws='[ 	]'; \
-	results=`for b in $$bases; do echo $$b.trs; done`; \
-	test -n "$$results" || results=/dev/null; \
-	all=`  grep "^$$ws*:test-result:"           $$results | wc -l`; \
-	pass=` grep "^$$ws*:test-result:$$ws*PASS"  $$results | wc -l`; \
-	fail=` grep "^$$ws*:test-result:$$ws*FAIL"  $$results | wc -l`; \
-	skip=` grep "^$$ws*:test-result:$$ws*SKIP"  $$results | wc -l`; \
-	xfail=`grep "^$$ws*:test-result:$$ws*XFAIL" $$results | wc -l`; \
-	xpass=`grep "^$$ws*:test-result:$$ws*XPASS" $$results | wc -l`; \
-	error=`grep "^$$ws*:test-result:$$ws*ERROR" $$results | wc -l`; \
-	if test `expr $$fail + $$xpass + $$error` -eq 0; then \
-	  success=true; \
-	else \
-	  success=false; \
-	fi; \
-	br='==================='; br=$$br$$br$$br$$br; \
-	result_count () \
-	{ \
-	    if test x"$$1" = x"--maybe-color"; then \
-	      maybe_colorize=yes; \
-	    elif test x"$$1" = x"--no-color"; then \
-	      maybe_colorize=no; \
+	  if test "$$all" -eq 1; then \
+	    tests="test"; \
+	    All=""; \
+	  else \
+	    tests="tests"; \
+	    All="All "; \
+	  fi; \
+	  if test "$$failed" -eq 0; then \
+	    if test "$$xfail" -eq 0; then \
+	      banner="$$All$$all $$tests passed"; \
 	    else \
-	      echo "$@: invalid 'result_count' usage" >&2; exit 4; \
+	      if test "$$xfail" -eq 1; then failures=failure; else failures=failures; fi; \
+	      banner="$$All$$all $$tests behaved as expected ($$xfail expected $$failures)"; \
 	    fi; \
-	    shift; \
-	    desc=$$1 count=$$2; \
-	    if test $$maybe_colorize = yes && test $$count -gt 0; then \
-	      color_start=$$3 color_end=$$std; \
+	  else \
+	    if test "$$xpass" -eq 0; then \
+	      banner="$$failed of $$all $$tests failed"; \
 	    else \
-	      color_start= color_end=; \
+	      if test "$$xpass" -eq 1; then passes=pass; else passes=passes; fi; \
+	      banner="$$failed of $$all $$tests did not behave as expected ($$xpass unexpected $$passes)"; \
 	    fi; \
-	    echo "$${color_start}# $$desc $$count$${color_end}"; \
-	}; \
-	create_testsuite_report () \
-	{ \
-	  result_count $$1 "TOTAL:" $$all   "$$brg"; \
-	  result_count $$1 "PASS: " $$pass  "$$grn"; \
-	  result_count $$1 "SKIP: " $$skip  "$$blu"; \
-	  result_count $$1 "XFAIL:" $$xfail "$$lgn"; \
-	  result_count $$1 "FAIL: " $$fail  "$$red"; \
-	  result_count $$1 "XPASS:" $$xpass "$$red"; \
-	  result_count $$1 "ERROR:" $$error "$$mgn"; \
-	}; \
-	{								\
-	  echo "$(PACKAGE_STRING): $(subdir)/$(TEST_SUITE_LOG)" |	\
-	    $(am__rst_title);						\
-	  create_testsuite_report --no-color;				\
-	  echo;								\
-	  echo ".. contents:: :depth: 2";				\
-	  echo;								\
-	  for b in $$bases; do echo $$b; done				\
-	    | $(am__create_global_log);					\
-	} >$(TEST_SUITE_LOG).tmp || exit 1;				\
-	mv $(TEST_SUITE_LOG).tmp $(TEST_SUITE_LOG);			\
-	if $$success; then						\
-	  col="$$grn";							\
-	 else								\
-	  col="$$red";							\
-	  test x"$$VERBOSE" = x || cat $(TEST_SUITE_LOG);		\
-	fi;								\
-	echo "$${col}$$br$${std}"; 					\
-	echo "$${col}Testsuite summary for $(PACKAGE_STRING)$${std}";	\
-	echo "$${col}$$br$${std}"; 					\
-	create_testsuite_report --maybe-color;				\
-	echo "$$col$$br$$std";						\
-	if $$success; then :; else					\
-	  echo "$${col}See $(subdir)/$(TEST_SUITE_LOG)$${std}";		\
-	  if test -n "$(PACKAGE_BUGREPORT)"; then			\
-	    echo "$${col}Please report to $(PACKAGE_BUGREPORT)$${std}";	\
-	  fi;								\
-	  echo "$$col$$br$$std";					\
-	fi;								\
-	$$success || exit 1
-
-check-TESTS:
-	@list='$(RECHECK_LOGS)';           test -z "$$list" || rm -f $$list
-	@list='$(RECHECK_LOGS:.log=.trs)'; test -z "$$list" || rm -f $$list
-	@test -z "$(TEST_SUITE_LOG)" || rm -f $(TEST_SUITE_LOG)
-	@set +e; $(am__set_TESTS_bases); \
-	log_list=`for i in $$bases; do echo $$i.log; done`; \
-	trs_list=`for i in $$bases; do echo $$i.trs; done`; \
-	log_list=`echo $$log_list`; trs_list=`echo $$trs_list`; \
-	$(MAKE) $(AM_MAKEFLAGS) $(TEST_SUITE_LOG) TEST_LOGS="$$log_list"; \
-	exit $$?;
-recheck: all 
-	@test -z "$(TEST_SUITE_LOG)" || rm -f $(TEST_SUITE_LOG)
-	@set +e; $(am__set_TESTS_bases); \
-	bases=`for i in $$bases; do echo $$i; done \
-	         | $(am__list_recheck_tests)` || exit 1; \
-	log_list=`for i in $$bases; do echo $$i.log; done`; \
-	log_list=`echo $$log_list`; \
-	$(MAKE) $(AM_MAKEFLAGS) $(TEST_SUITE_LOG) \
-	        am__force_recheck=am--force-recheck \
-	        TEST_LOGS="$$log_list"; \
-	exit $$?
-test-compat.log: test-compat$(EXEEXT)
-	@p='test-compat$(EXEEXT)'; \
-	b='test-compat'; \
-	$(am__check_pre) $(LOG_DRIVER) --test-name "$$f" \
-	--log-file $$b.log --trs-file $$b.trs \
-	$(am__common_driver_flags) $(AM_LOG_DRIVER_FLAGS) $(LOG_DRIVER_FLAGS) -- $(LOG_COMPILE) \
-	"$$tst" $(AM_TESTS_FD_REDIRECT)
-test-hash.log: test-hash$(EXEEXT)
-	@p='test-hash$(EXEEXT)'; \
-	b='test-hash'; \
-	$(am__check_pre) $(LOG_DRIVER) --test-name "$$f" \
-	--log-file $$b.log --trs-file $$b.trs \
-	$(am__common_driver_flags) $(AM_LOG_DRIVER_FLAGS) $(LOG_DRIVER_FLAGS) -- $(LOG_COMPILE) \
-	"$$tst" $(AM_TESTS_FD_REDIRECT)
-test-dict.log: test-dict$(EXEEXT)
-	@p='test-dict$(EXEEXT)'; \
-	b='test-dict'; \
-	$(am__check_pre) $(LOG_DRIVER) --test-name "$$f" \
-	--log-file $$b.log --trs-file $$b.trs \
-	$(am__common_driver_flags) $(AM_LOG_DRIVER_FLAGS) $(LOG_DRIVER_FLAGS) -- $(LOG_COMPILE) \
-	"$$tst" $(AM_TESTS_FD_REDIRECT)
-test-array.log: test-array$(EXEEXT)
-	@p='test-array$(EXEEXT)'; \
-	b='test-array'; \
-	$(am__check_pre) $(LOG_DRIVER) --test-name "$$f" \
-	--log-file $$b.log --trs-file $$b.trs \
-	$(am__common_driver_flags) $(AM_LOG_DRIVER_FLAGS) $(LOG_DRIVER_FLAGS) -- $(LOG_COMPILE) \
-	"$$tst" $(AM_TESTS_FD_REDIRECT)
-test-constants.log: test-constants$(EXEEXT)
-	@p='test-constants$(EXEEXT)'; \
-	b='test-constants'; \
-	$(am__check_pre) $(LOG_DRIVER) --test-name "$$f" \
-	--log-file $$b.log --trs-file $$b.trs \
-	$(am__common_driver_flags) $(AM_LOG_DRIVER_FLAGS) $(LOG_DRIVER_FLAGS) -- $(LOG_COMPILE) \
-	"$$tst" $(AM_TESTS_FD_REDIRECT)
-test-attrs.log: test-attrs$(EXEEXT)
-	@p='test-attrs$(EXEEXT)'; \
-	b='test-attrs'; \
-	$(am__check_pre) $(LOG_DRIVER) --test-name "$$f" \
-	--log-file $$b.log --trs-file $$b.trs \
-	$(am__common_driver_flags) $(AM_LOG_DRIVER_FLAGS) $(LOG_DRIVER_FLAGS) -- $(LOG_COMPILE) \
-	"$$tst" $(AM_TESTS_FD_REDIRECT)
-test-buffer.log: test-buffer$(EXEEXT)
-	@p='test-buffer$(EXEEXT)'; \
-	b='test-buffer'; \
-	$(am__check_pre) $(LOG_DRIVER) --test-name "$$f" \
-	--log-file $$b.log --trs-file $$b.trs \
-	$(am__common_driver_flags) $(AM_LOG_DRIVER_FLAGS) $(LOG_DRIVER_FLAGS) -- $(LOG_COMPILE) \
-	"$$tst" $(AM_TESTS_FD_REDIRECT)
-test-url.log: test-url$(EXEEXT)
-	@p='test-url$(EXEEXT)'; \
-	b='test-url'; \
-	$(am__check_pre) $(LOG_DRIVER) --test-name "$$f" \
-	--log-file $$b.log --trs-file $$b.trs \
-	$(am__common_driver_flags) $(AM_LOG_DRIVER_FLAGS) $(LOG_DRIVER_FLAGS) -- $(LOG_COMPILE) \
-	"$$tst" $(AM_TESTS_FD_REDIRECT)
-test-path.log: test-path$(EXEEXT)
-	@p='test-path$(EXEEXT)'; \
-	b='test-path'; \
-	$(am__check_pre) $(LOG_DRIVER) --test-name "$$f" \
-	--log-file $$b.log --trs-file $$b.trs \
-	$(am__common_driver_flags) $(AM_LOG_DRIVER_FLAGS) $(LOG_DRIVER_FLAGS) -- $(LOG_COMPILE) \
-	"$$tst" $(AM_TESTS_FD_REDIRECT)
-test-asn1.log: test-asn1$(EXEEXT)
-	@p='test-asn1$(EXEEXT)'; \
-	b='test-asn1'; \
-	$(am__check_pre) $(LOG_DRIVER) --test-name "$$f" \
-	--log-file $$b.log --trs-file $$b.trs \
-	$(am__common_driver_flags) $(AM_LOG_DRIVER_FLAGS) $(LOG_DRIVER_FLAGS) -- $(LOG_COMPILE) \
-	"$$tst" $(AM_TESTS_FD_REDIRECT)
-test-base64.log: test-base64$(EXEEXT)
-	@p='test-base64$(EXEEXT)'; \
-	b='test-base64'; \
-	$(am__check_pre) $(LOG_DRIVER) --test-name "$$f" \
-	--log-file $$b.log --trs-file $$b.trs \
-	$(am__common_driver_flags) $(AM_LOG_DRIVER_FLAGS) $(LOG_DRIVER_FLAGS) -- $(LOG_COMPILE) \
-	"$$tst" $(AM_TESTS_FD_REDIRECT)
-test-lexer.log: test-lexer$(EXEEXT)
-	@p='test-lexer$(EXEEXT)'; \
-	b='test-lexer'; \
-	$(am__check_pre) $(LOG_DRIVER) --test-name "$$f" \
-	--log-file $$b.log --trs-file $$b.trs \
-	$(am__common_driver_flags) $(AM_LOG_DRIVER_FLAGS) $(LOG_DRIVER_FLAGS) -- $(LOG_COMPILE) \
-	"$$tst" $(AM_TESTS_FD_REDIRECT)
-test-pem.log: test-pem$(EXEEXT)
-	@p='test-pem$(EXEEXT)'; \
-	b='test-pem'; \
-	$(am__check_pre) $(LOG_DRIVER) --test-name "$$f" \
-	--log-file $$b.log --trs-file $$b.trs \
-	$(am__common_driver_flags) $(AM_LOG_DRIVER_FLAGS) $(LOG_DRIVER_FLAGS) -- $(LOG_COMPILE) \
-	"$$tst" $(AM_TESTS_FD_REDIRECT)
-test-oid.log: test-oid$(EXEEXT)
-	@p='test-oid$(EXEEXT)'; \
-	b='test-oid'; \
-	$(am__check_pre) $(LOG_DRIVER) --test-name "$$f" \
-	--log-file $$b.log --trs-file $$b.trs \
-	$(am__common_driver_flags) $(AM_LOG_DRIVER_FLAGS) $(LOG_DRIVER_FLAGS) -- $(LOG_COMPILE) \
-	"$$tst" $(AM_TESTS_FD_REDIRECT)
-test-utf8.log: test-utf8$(EXEEXT)
-	@p='test-utf8$(EXEEXT)'; \
-	b='test-utf8'; \
-	$(am__check_pre) $(LOG_DRIVER) --test-name "$$f" \
-	--log-file $$b.log --trs-file $$b.trs \
-	$(am__common_driver_flags) $(AM_LOG_DRIVER_FLAGS) $(LOG_DRIVER_FLAGS) -- $(LOG_COMPILE) \
-	"$$tst" $(AM_TESTS_FD_REDIRECT)
-test-x509.log: test-x509$(EXEEXT)
-	@p='test-x509$(EXEEXT)'; \
-	b='test-x509'; \
-	$(am__check_pre) $(LOG_DRIVER) --test-name "$$f" \
-	--log-file $$b.log --trs-file $$b.trs \
-	$(am__common_driver_flags) $(AM_LOG_DRIVER_FLAGS) $(LOG_DRIVER_FLAGS) -- $(LOG_COMPILE) \
-	"$$tst" $(AM_TESTS_FD_REDIRECT)
-.test.log:
-	@p='$<'; \
-	$(am__set_b); \
-	$(am__check_pre) $(TEST_LOG_DRIVER) --test-name "$$f" \
-	--log-file $$b.log --trs-file $$b.trs \
-	$(am__common_driver_flags) $(AM_TEST_LOG_DRIVER_FLAGS) $(TEST_LOG_DRIVER_FLAGS) -- $(TEST_LOG_COMPILE) \
-	"$$tst" $(AM_TESTS_FD_REDIRECT)
-@am__EXEEXT_TRUE@.test$(EXEEXT).log:
-@am__EXEEXT_TRUE@	@p='$<'; \
-@am__EXEEXT_TRUE@	$(am__set_b); \
-@am__EXEEXT_TRUE@	$(am__check_pre) $(TEST_LOG_DRIVER) --test-name "$$f" \
-@am__EXEEXT_TRUE@	--log-file $$b.log --trs-file $$b.trs \
-@am__EXEEXT_TRUE@	$(am__common_driver_flags) $(AM_TEST_LOG_DRIVER_FLAGS) $(TEST_LOG_DRIVER_FLAGS) -- $(TEST_LOG_COMPILE) \
-@am__EXEEXT_TRUE@	"$$tst" $(AM_TESTS_FD_REDIRECT)
+	  fi; \
+	  dashes="$$banner"; \
+	  skipped=""; \
+	  if test "$$skip" -ne 0; then \
+	    if test "$$skip" -eq 1; then \
+	      skipped="($$skip test was not run)"; \
+	    else \
+	      skipped="($$skip tests were not run)"; \
+	    fi; \
+	    test `echo "$$skipped" | wc -c` -le `echo "$$banner" | wc -c` || \
+	      dashes="$$skipped"; \
+	  fi; \
+	  report=""; \
+	  if test "$$failed" -ne 0 && test -n "$(PACKAGE_BUGREPORT)"; then \
+	    report="Please report to $(PACKAGE_BUGREPORT)"; \
+	    test `echo "$$report" | wc -c` -le `echo "$$banner" | wc -c` || \
+	      dashes="$$report"; \
+	  fi; \
+	  dashes=`echo "$$dashes" | sed s/./=/g`; \
+	  if test "$$failed" -eq 0; then \
+	    col="$$grn"; \
+	  else \
+	    col="$$red"; \
+	  fi; \
+	  echo "$${col}$$dashes$${std}"; \
+	  echo "$${col}$$banner$${std}"; \
+	  test -z "$$skipped" || echo "$${col}$$skipped$${std}"; \
+	  test -z "$$report" || echo "$${col}$$report$${std}"; \
+	  echo "$${col}$$dashes$${std}"; \
+	  test "$$failed" -eq 0; \
+	else :; fi
 
 distdir: $(DISTFILES)
 	@srcdirstrip=`echo "$(srcdir)" | sed 's/[].[^$$\\*]/\\\\&/g'`; \
@@ -1275,9 +820,6 @@ install-strip:
 	    "INSTALL_PROGRAM_ENV=STRIPPROG='$(STRIP)'" install; \
 	fi
 mostlyclean-generic:
-	-test -z "$(TEST_LOGS)" || rm -f $(TEST_LOGS)
-	-test -z "$(TEST_LOGS:.log=.trs)" || rm -f $(TEST_LOGS:.log=.trs)
-	-test -z "$(TEST_SUITE_LOG)" || rm -f $(TEST_SUITE_LOG)
 
 clean-generic:
 
@@ -1373,7 +915,7 @@ uninstall-am:
 	installcheck-am installdirs maintainer-clean \
 	maintainer-clean-generic mostlyclean mostlyclean-compile \
 	mostlyclean-generic mostlyclean-libtool pdf pdf-am ps ps-am \
-	recheck tags tags-am uninstall uninstall-am
+	tags tags-am uninstall uninstall-am
 
 
 memcheck: all
