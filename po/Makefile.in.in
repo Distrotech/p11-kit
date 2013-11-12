@@ -8,13 +8,14 @@
 # Please note that the actual code of GNU gettext is covered by the GNU
 # General Public License and is *not* in the public domain.
 #
-# Origin: gettext-0.18.2
+# Origin: gettext-0.18.3
 GETTEXT_MACRO_VERSION = 0.18
 
 PACKAGE = @PACKAGE@
 VERSION = @VERSION@
 PACKAGE_BUGREPORT = @PACKAGE_BUGREPORT@
 
+SED = @SED@
 SHELL = /bin/sh
 @SET_MAKE@
 
@@ -96,7 +97,6 @@ CATALOGS = @CATALOGS@
 	mv t-$@ $@
 
 
-ifneq (:,$(GMSGFMT))
 all: all-@USE_NLS@
 
 all-yes: stamp-po
@@ -108,9 +108,6 @@ CHECK_MACRO_VERSION = \
 	  || { echo "*** error: gettext infrastructure mismatch: using a Makefile.in.in from gettext version $(GETTEXT_MACRO_VERSION) but the autoconf macros are from gettext version @GETTEXT_MACRO_VERSION@" 1>&2; \
 	       exit 1; \
 	     }
-else
-all:
-endif
 
 # $(srcdir)/$(DOMAIN).pot is only created when needed. When xgettext finds no
 # internationalized messages, no $(srcdir)/$(DOMAIN).pot is created (because
