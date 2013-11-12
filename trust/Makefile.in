@@ -15,6 +15,8 @@
 @SET_MAKE@
 
 
+
+
 VPATH = @srcdir@
 am__is_gnu_make = test -n '$(MAKEFILE_LIST)' && test -n '$(MAKELEVEL)'
 am__make_running_with_option = \
@@ -80,7 +82,9 @@ POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
 DIST_COMMON = $(top_srcdir)/build/Makefile.decl $(srcdir)/Makefile.in \
-	$(srcdir)/Makefile.am $(top_srcdir)/depcomp
+	$(srcdir)/Makefile.am $(srcdir)/trust-extract-compat.in \
+	$(top_srcdir)/build/aux/depcomp
+bin_PROGRAMS = trust$(EXEEXT)
 subdir = trust
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/build/m4/gettext.m4 \
@@ -99,7 +103,7 @@ am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
 mkinstalldirs = $(install_sh) -d
 CONFIG_HEADER = $(top_builddir)/config.h
-CONFIG_CLEAN_FILES =
+CONFIG_CLEAN_FILES = trust-extract-compat
 CONFIG_CLEAN_VPATH_FILES =
 am__vpath_adj_setup = srcdirstrip=`echo "$(srcdir)" | sed 's|.|.|g'`;
 am__vpath_adj = case $$p in \
@@ -128,30 +132,36 @@ am__uninstall_files_from_dir = { \
     || { echo " ( cd '$$dir' && rm -f" $$files ")"; \
          $(am__cd) "$$dir" && rm -f $$files; }; \
   }
-am__installdirs = "$(DESTDIR)$(moduledir)" "$(DESTDIR)$(configdir)"
+am__installdirs = "$(DESTDIR)$(moduledir)" "$(DESTDIR)$(bindir)" \
+	"$(DESTDIR)$(externaldir)" "$(DESTDIR)$(configdir)"
 LTLIBRARIES = $(module_LTLIBRARIES) $(noinst_LTLIBRARIES)
-libtrust_testable_la_LIBADD =
+libtrust_data_la_LIBADD =
 am__objects_1 =
-am__objects_2 = builder.lo index.lo parser.lo persist.lo module.lo \
-	session.lo token.lo $(am__objects_1)
-am_libtrust_testable_la_OBJECTS = $(am__objects_2)
-libtrust_testable_la_OBJECTS = $(am_libtrust_testable_la_OBJECTS)
+am_libtrust_data_la_OBJECTS = asn1.lo base64.lo pem.lo oid.lo utf8.lo \
+	x509.lo $(am__objects_1)
+libtrust_data_la_OBJECTS = $(am_libtrust_data_la_OBJECTS)
 AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
 am__v_lt_0 = --silent
 am__v_lt_1 = 
+libtrust_testable_la_LIBADD =
+am__objects_2 = builder.lo digest.lo index.lo parser.lo persist.lo \
+	module.lo save.lo session.lo token.lo $(am__objects_1)
+am_libtrust_testable_la_OBJECTS = $(am__objects_2)
+libtrust_testable_la_OBJECTS = $(am_libtrust_testable_la_OBJECTS)
 libtrust_testable_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
 	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CCLD) \
 	$(AM_CFLAGS) $(CFLAGS) $(libtrust_testable_la_LDFLAGS) \
 	$(LDFLAGS) -o $@
 am__DEPENDENCIES_1 =
-p11_kit_trust_la_DEPENDENCIES = $(top_builddir)/common/libp11-data.la \
+p11_kit_trust_la_DEPENDENCIES = libtrust-data.la \
 	$(top_builddir)/common/libp11-library.la \
 	$(top_builddir)/common/libp11-common.la $(am__DEPENDENCIES_1) \
-	$(am__DEPENDENCIES_1)
-am__objects_3 = p11_kit_trust_la-builder.lo p11_kit_trust_la-index.lo \
-	p11_kit_trust_la-parser.lo p11_kit_trust_la-persist.lo \
-	p11_kit_trust_la-module.lo p11_kit_trust_la-session.lo \
+	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1)
+am__objects_3 = p11_kit_trust_la-builder.lo p11_kit_trust_la-digest.lo \
+	p11_kit_trust_la-index.lo p11_kit_trust_la-parser.lo \
+	p11_kit_trust_la-persist.lo p11_kit_trust_la-module.lo \
+	p11_kit_trust_la-save.lo p11_kit_trust_la-session.lo \
 	p11_kit_trust_la-token.lo $(am__objects_1)
 am_p11_kit_trust_la_OBJECTS = $(am__objects_3)
 p11_kit_trust_la_OBJECTS = $(am_p11_kit_trust_la_OBJECTS)
@@ -159,6 +169,25 @@ p11_kit_trust_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
 	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CCLD) \
 	$(p11_kit_trust_la_CFLAGS) $(CFLAGS) \
 	$(p11_kit_trust_la_LDFLAGS) $(LDFLAGS) -o $@
+PROGRAMS = $(bin_PROGRAMS)
+am_trust_OBJECTS = trust-anchor.$(OBJEXT) trust-parser.$(OBJEXT) \
+	trust-persist.$(OBJEXT) trust-digest.$(OBJEXT) \
+	trust-enumerate.$(OBJEXT) trust-extract.$(OBJEXT) \
+	trust-extract-jks.$(OBJEXT) trust-extract-openssl.$(OBJEXT) \
+	trust-extract-pem.$(OBJEXT) trust-extract-cer.$(OBJEXT) \
+	trust-list.$(OBJEXT) trust-save.$(OBJEXT) \
+	trust-trust.$(OBJEXT) $(am__objects_1)
+trust_OBJECTS = $(am_trust_OBJECTS)
+trust_DEPENDENCIES = libtrust-data.la \
+	$(top_builddir)/p11-kit/libp11-kit.la \
+	$(top_builddir)/common/libp11-common.la \
+	$(top_builddir)/common/libp11-tool.la $(am__DEPENDENCIES_1) \
+	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) \
+	$(am__DEPENDENCIES_1)
+trust_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
+	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(trust_CFLAGS) $(CFLAGS) \
+	$(AM_LDFLAGS) $(LDFLAGS) -o $@
+SCRIPTS = $(external_SCRIPTS)
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
 am__v_P_0 = false
@@ -172,7 +201,7 @@ am__v_at_ = $(am__v_at_@AM_DEFAULT_V@)
 am__v_at_0 = @
 am__v_at_1 = 
 DEFAULT_INCLUDES = -I.@am__isrc@ -I$(top_builddir)
-depcomp = $(SHELL) $(top_srcdir)/depcomp
+depcomp = $(SHELL) $(top_srcdir)/build/aux/depcomp
 am__depfiles_maybe = depfiles
 am__mv = mv -f
 COMPILE = $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) \
@@ -193,9 +222,11 @@ AM_V_CCLD = $(am__v_CCLD_@AM_V@)
 am__v_CCLD_ = $(am__v_CCLD_@AM_DEFAULT_V@)
 am__v_CCLD_0 = @echo "  CCLD    " $@;
 am__v_CCLD_1 = 
-SOURCES = $(libtrust_testable_la_SOURCES) $(p11_kit_trust_la_SOURCES)
-DIST_SOURCES = $(libtrust_testable_la_SOURCES) \
-	$(p11_kit_trust_la_SOURCES)
+SOURCES = $(libtrust_data_la_SOURCES) $(libtrust_testable_la_SOURCES) \
+	$(p11_kit_trust_la_SOURCES) $(trust_SOURCES)
+DIST_SOURCES = $(libtrust_data_la_SOURCES) \
+	$(libtrust_testable_la_SOURCES) $(p11_kit_trust_la_SOURCES) \
+	$(trust_SOURCES)
 RECURSIVE_TARGETS = all-recursive check-recursive cscopelist-recursive \
 	ctags-recursive dvi-recursive html-recursive info-recursive \
 	install-data-recursive install-dvi-recursive \
@@ -299,6 +330,7 @@ GTKDOC_CHECK = @GTKDOC_CHECK@
 GTKDOC_MKPDF = @GTKDOC_MKPDF@
 GTKDOC_REBASE = @GTKDOC_REBASE@
 GTKDOC_SCAN = @GTKDOC_SCAN@
+HASH_LIBS = @HASH_LIBS@
 HTML_DIR = @HTML_DIR@
 INSTALL = @INSTALL@
 INSTALL_DATA = @INSTALL_DATA@
@@ -432,17 +464,37 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/common \
 	-DDATADIR=\"$(datadir)\" \
 	-DSYSCONFDIR=\"$(sysconfdir)\" \
+	-DPRIVATEDIR=\"$(privatedir)\" \
 	$(LIBTASN1_CFLAGS) \
+	$(NULL)
+
+noinst_LTLIBRARIES = \
+	libtrust-testable.la \
+	libtrust-data.la
+
+libtrust_data_la_SOURCES = \
+	asn1.c asn1.h \
+	basic.asn basic.asn.h \
+	base64.c base64.h \
+	pem.c pem.h \
+	pkix.asn pkix.asn.h \
+	oid.c oid.h \
+	openssl.asn openssl.asn.h \
+	utf8.c utf8.h \
+	x509.c x509.h \
 	$(NULL)
 
 MODULE_SRCS = \
 	builder.c builder.h \
+	digest.c digest.h \
 	index.c index.h \
 	parser.c parser.h \
 	persist.c persist.h \
 	module.c module.h \
+	save.c save.h \
 	session.c session.h \
 	token.c token.h \
+	types.h \
 	$(NULL)
 
 configdir = $(p11_package_config_modules)
@@ -455,10 +507,11 @@ p11_kit_trust_la_CFLAGS = \
 	$(LIBTASN1_CFLAGS)
 
 p11_kit_trust_la_LIBADD = \
-	$(top_builddir)/common/libp11-data.la \
+	libtrust-data.la \
 	$(top_builddir)/common/libp11-library.la \
 	$(top_builddir)/common/libp11-common.la \
 	$(LIBTASN1_LIBS) \
+	$(HASH_LIBS) \
 	$(NULL)
 
 p11_kit_trust_la_LDFLAGS = \
@@ -468,13 +521,47 @@ p11_kit_trust_la_LDFLAGS = \
 	$(NULL)
 
 p11_kit_trust_la_SOURCES = $(MODULE_SRCS)
-noinst_LTLIBRARIES = \
-	libtrust-testable.la
-
 libtrust_testable_la_LDFLAGS = \
 	-no-undefined
 
 libtrust_testable_la_SOURCES = $(MODULE_SRCS)
+trust_LDADD = \
+	libtrust-data.la \
+	$(top_builddir)/p11-kit/libp11-kit.la \
+	$(top_builddir)/common/libp11-common.la \
+	$(top_builddir)/common/libp11-tool.la \
+	$(LTLIBINTL) \
+	$(LIBTASN1_LIBS) \
+	$(HASH_LIBS) \
+	$(NULL)
+
+trust_CFLAGS = \
+	-I$(top_srcdir)/p11-kit \
+	-DP11_KIT_FUTURE_UNSTABLE_API \
+	$(LIBTASN1_CFLAGS) \
+	$(NULL)
+
+trust_SOURCES = \
+	anchor.c anchor.h \
+	parser.c parser.h \
+	persist.c persist.h \
+	digest.c digest.h \
+	enumerate.c enumerate.h \
+	extract.c extract.h \
+	extract-jks.c \
+	extract-openssl.c \
+	extract-pem.c \
+	extract-cer.c \
+	list.c list.h \
+	openssl.asn openssl.asn.h \
+	save.c save.h \
+	trust.c \
+	$(NULL)
+
+externaldir = $(privatedir)
+external_SCRIPTS = \
+	trust-extract-compat
+
 EXTRA_DIST = \
 	p11-kit-trust.module
 
@@ -491,9 +578,9 @@ $(srcdir)/Makefile.in: @MAINTAINER_MODE_TRUE@ $(srcdir)/Makefile.am $(top_srcdir
 	      exit 1;; \
 	  esac; \
 	done; \
-	echo ' cd $(top_srcdir) && $(AUTOMAKE) --gnu trust/Makefile'; \
+	echo ' cd $(top_srcdir) && $(AUTOMAKE) --foreign trust/Makefile'; \
 	$(am__cd) $(top_srcdir) && \
-	  $(AUTOMAKE) --gnu trust/Makefile
+	  $(AUTOMAKE) --foreign trust/Makefile
 .PRECIOUS: Makefile
 Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
 	@case '$?' in \
@@ -513,6 +600,8 @@ $(top_srcdir)/configure: @MAINTAINER_MODE_TRUE@ $(am__configure_deps)
 $(ACLOCAL_M4): @MAINTAINER_MODE_TRUE@ $(am__aclocal_m4_deps)
 	cd $(top_builddir) && $(MAKE) $(AM_MAKEFLAGS) am--refresh
 $(am__aclocal_m4_deps):
+trust-extract-compat: $(top_builddir)/config.status $(srcdir)/trust-extract-compat.in
+	cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@
 
 install-moduleLTLIBRARIES: $(module_LTLIBRARIES)
 	@$(NORMAL_INSTALL)
@@ -560,11 +649,102 @@ clean-noinstLTLIBRARIES:
 	  rm -f $${locs}; \
 	}
 
+libtrust-data.la: $(libtrust_data_la_OBJECTS) $(libtrust_data_la_DEPENDENCIES) $(EXTRA_libtrust_data_la_DEPENDENCIES) 
+	$(AM_V_CCLD)$(LINK)  $(libtrust_data_la_OBJECTS) $(libtrust_data_la_LIBADD) $(LIBS)
+
 libtrust-testable.la: $(libtrust_testable_la_OBJECTS) $(libtrust_testable_la_DEPENDENCIES) $(EXTRA_libtrust_testable_la_DEPENDENCIES) 
 	$(AM_V_CCLD)$(libtrust_testable_la_LINK)  $(libtrust_testable_la_OBJECTS) $(libtrust_testable_la_LIBADD) $(LIBS)
 
 p11-kit-trust.la: $(p11_kit_trust_la_OBJECTS) $(p11_kit_trust_la_DEPENDENCIES) $(EXTRA_p11_kit_trust_la_DEPENDENCIES) 
 	$(AM_V_CCLD)$(p11_kit_trust_la_LINK) -rpath $(moduledir) $(p11_kit_trust_la_OBJECTS) $(p11_kit_trust_la_LIBADD) $(LIBS)
+install-binPROGRAMS: $(bin_PROGRAMS)
+	@$(NORMAL_INSTALL)
+	@list='$(bin_PROGRAMS)'; test -n "$(bindir)" || list=; \
+	if test -n "$$list"; then \
+	  echo " $(MKDIR_P) '$(DESTDIR)$(bindir)'"; \
+	  $(MKDIR_P) "$(DESTDIR)$(bindir)" || exit 1; \
+	fi; \
+	for p in $$list; do echo "$$p $$p"; done | \
+	sed 's/$(EXEEXT)$$//' | \
+	while read p p1; do if test -f $$p \
+	 || test -f $$p1 \
+	  ; then echo "$$p"; echo "$$p"; else :; fi; \
+	done | \
+	sed -e 'p;s,.*/,,;n;h' \
+	    -e 's|.*|.|' \
+	    -e 'p;x;s,.*/,,;s/$(EXEEXT)$$//;$(transform);s/$$/$(EXEEXT)/' | \
+	sed 'N;N;N;s,\n, ,g' | \
+	$(AWK) 'BEGIN { files["."] = ""; dirs["."] = 1 } \
+	  { d=$$3; if (dirs[d] != 1) { print "d", d; dirs[d] = 1 } \
+	    if ($$2 == $$4) files[d] = files[d] " " $$1; \
+	    else { print "f", $$3 "/" $$4, $$1; } } \
+	  END { for (d in files) print "f", d, files[d] }' | \
+	while read type dir files; do \
+	    if test "$$dir" = .; then dir=; else dir=/$$dir; fi; \
+	    test -z "$$files" || { \
+	    echo " $(INSTALL_PROGRAM_ENV) $(LIBTOOL) $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=install $(INSTALL_PROGRAM) $$files '$(DESTDIR)$(bindir)$$dir'"; \
+	    $(INSTALL_PROGRAM_ENV) $(LIBTOOL) $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=install $(INSTALL_PROGRAM) $$files "$(DESTDIR)$(bindir)$$dir" || exit $$?; \
+	    } \
+	; done
+
+uninstall-binPROGRAMS:
+	@$(NORMAL_UNINSTALL)
+	@list='$(bin_PROGRAMS)'; test -n "$(bindir)" || list=; \
+	files=`for p in $$list; do echo "$$p"; done | \
+	  sed -e 'h;s,^.*/,,;s/$(EXEEXT)$$//;$(transform)' \
+	      -e 's/$$/$(EXEEXT)/' \
+	`; \
+	test -n "$$list" || exit 0; \
+	echo " ( cd '$(DESTDIR)$(bindir)' && rm -f" $$files ")"; \
+	cd "$(DESTDIR)$(bindir)" && rm -f $$files
+
+clean-binPROGRAMS:
+	@list='$(bin_PROGRAMS)'; test -n "$$list" || exit 0; \
+	echo " rm -f" $$list; \
+	rm -f $$list || exit $$?; \
+	test -n "$(EXEEXT)" || exit 0; \
+	list=`for p in $$list; do echo "$$p"; done | sed 's/$(EXEEXT)$$//'`; \
+	echo " rm -f" $$list; \
+	rm -f $$list
+
+trust$(EXEEXT): $(trust_OBJECTS) $(trust_DEPENDENCIES) $(EXTRA_trust_DEPENDENCIES) 
+	@rm -f trust$(EXEEXT)
+	$(AM_V_CCLD)$(trust_LINK) $(trust_OBJECTS) $(trust_LDADD) $(LIBS)
+install-externalSCRIPTS: $(external_SCRIPTS)
+	@$(NORMAL_INSTALL)
+	@list='$(external_SCRIPTS)'; test -n "$(externaldir)" || list=; \
+	if test -n "$$list"; then \
+	  echo " $(MKDIR_P) '$(DESTDIR)$(externaldir)'"; \
+	  $(MKDIR_P) "$(DESTDIR)$(externaldir)" || exit 1; \
+	fi; \
+	for p in $$list; do \
+	  if test -f "$$p"; then d=; else d="$(srcdir)/"; fi; \
+	  if test -f "$$d$$p"; then echo "$$d$$p"; echo "$$p"; else :; fi; \
+	done | \
+	sed -e 'p;s,.*/,,;n' \
+	    -e 'h;s|.*|.|' \
+	    -e 'p;x;s,.*/,,;$(transform)' | sed 'N;N;N;s,\n, ,g' | \
+	$(AWK) 'BEGIN { files["."] = ""; dirs["."] = 1; } \
+	  { d=$$3; if (dirs[d] != 1) { print "d", d; dirs[d] = 1 } \
+	    if ($$2 == $$4) { files[d] = files[d] " " $$1; \
+	      if (++n[d] == $(am__install_max)) { \
+		print "f", d, files[d]; n[d] = 0; files[d] = "" } } \
+	    else { print "f", d "/" $$4, $$1 } } \
+	  END { for (d in files) print "f", d, files[d] }' | \
+	while read type dir files; do \
+	     if test "$$dir" = .; then dir=; else dir=/$$dir; fi; \
+	     test -z "$$files" || { \
+	       echo " $(INSTALL_SCRIPT) $$files '$(DESTDIR)$(externaldir)$$dir'"; \
+	       $(INSTALL_SCRIPT) $$files "$(DESTDIR)$(externaldir)$$dir" || exit $$?; \
+	     } \
+	; done
+
+uninstall-externalSCRIPTS:
+	@$(NORMAL_UNINSTALL)
+	@list='$(external_SCRIPTS)'; test -n "$(externaldir)" || exit 0; \
+	files=`for p in $$list; do echo "$$p"; done | \
+	       sed -e 's,.*/,,;$(transform)'`; \
+	dir='$(DESTDIR)$(externaldir)'; $(am__uninstall_files_from_dir)
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
@@ -572,20 +752,43 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/asn1.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/base64.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/builder.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/digest.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/index.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/module.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/oid.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/p11_kit_trust_la-builder.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/p11_kit_trust_la-digest.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/p11_kit_trust_la-index.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/p11_kit_trust_la-module.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/p11_kit_trust_la-parser.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/p11_kit_trust_la-persist.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/p11_kit_trust_la-save.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/p11_kit_trust_la-session.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/p11_kit_trust_la-token.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/parser.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/pem.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/persist.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/save.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/session.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/token.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/trust-anchor.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/trust-digest.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/trust-enumerate.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/trust-extract-cer.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/trust-extract-jks.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/trust-extract-openssl.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/trust-extract-pem.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/trust-extract.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/trust-list.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/trust-parser.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/trust-persist.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/trust-save.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/trust-trust.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/utf8.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/x509.Plo@am__quote@
 
 .c.o:
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<
@@ -615,6 +818,13 @@ p11_kit_trust_la-builder.lo: builder.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(p11_kit_trust_la_CFLAGS) $(CFLAGS) -c -o p11_kit_trust_la-builder.lo `test -f 'builder.c' || echo '$(srcdir)/'`builder.c
 
+p11_kit_trust_la-digest.lo: digest.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(p11_kit_trust_la_CFLAGS) $(CFLAGS) -MT p11_kit_trust_la-digest.lo -MD -MP -MF $(DEPDIR)/p11_kit_trust_la-digest.Tpo -c -o p11_kit_trust_la-digest.lo `test -f 'digest.c' || echo '$(srcdir)/'`digest.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/p11_kit_trust_la-digest.Tpo $(DEPDIR)/p11_kit_trust_la-digest.Plo
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='digest.c' object='p11_kit_trust_la-digest.lo' libtool=yes @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(p11_kit_trust_la_CFLAGS) $(CFLAGS) -c -o p11_kit_trust_la-digest.lo `test -f 'digest.c' || echo '$(srcdir)/'`digest.c
+
 p11_kit_trust_la-index.lo: index.c
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(p11_kit_trust_la_CFLAGS) $(CFLAGS) -MT p11_kit_trust_la-index.lo -MD -MP -MF $(DEPDIR)/p11_kit_trust_la-index.Tpo -c -o p11_kit_trust_la-index.lo `test -f 'index.c' || echo '$(srcdir)/'`index.c
 @am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/p11_kit_trust_la-index.Tpo $(DEPDIR)/p11_kit_trust_la-index.Plo
@@ -643,6 +853,13 @@ p11_kit_trust_la-module.lo: module.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(p11_kit_trust_la_CFLAGS) $(CFLAGS) -c -o p11_kit_trust_la-module.lo `test -f 'module.c' || echo '$(srcdir)/'`module.c
 
+p11_kit_trust_la-save.lo: save.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(p11_kit_trust_la_CFLAGS) $(CFLAGS) -MT p11_kit_trust_la-save.lo -MD -MP -MF $(DEPDIR)/p11_kit_trust_la-save.Tpo -c -o p11_kit_trust_la-save.lo `test -f 'save.c' || echo '$(srcdir)/'`save.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/p11_kit_trust_la-save.Tpo $(DEPDIR)/p11_kit_trust_la-save.Plo
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='save.c' object='p11_kit_trust_la-save.lo' libtool=yes @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(p11_kit_trust_la_CFLAGS) $(CFLAGS) -c -o p11_kit_trust_la-save.lo `test -f 'save.c' || echo '$(srcdir)/'`save.c
+
 p11_kit_trust_la-session.lo: session.c
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(p11_kit_trust_la_CFLAGS) $(CFLAGS) -MT p11_kit_trust_la-session.lo -MD -MP -MF $(DEPDIR)/p11_kit_trust_la-session.Tpo -c -o p11_kit_trust_la-session.lo `test -f 'session.c' || echo '$(srcdir)/'`session.c
 @am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/p11_kit_trust_la-session.Tpo $(DEPDIR)/p11_kit_trust_la-session.Plo
@@ -656,6 +873,188 @@ p11_kit_trust_la-token.lo: token.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='token.c' object='p11_kit_trust_la-token.lo' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(p11_kit_trust_la_CFLAGS) $(CFLAGS) -c -o p11_kit_trust_la-token.lo `test -f 'token.c' || echo '$(srcdir)/'`token.c
+
+trust-anchor.o: anchor.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -MT trust-anchor.o -MD -MP -MF $(DEPDIR)/trust-anchor.Tpo -c -o trust-anchor.o `test -f 'anchor.c' || echo '$(srcdir)/'`anchor.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/trust-anchor.Tpo $(DEPDIR)/trust-anchor.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='anchor.c' object='trust-anchor.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -c -o trust-anchor.o `test -f 'anchor.c' || echo '$(srcdir)/'`anchor.c
+
+trust-anchor.obj: anchor.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -MT trust-anchor.obj -MD -MP -MF $(DEPDIR)/trust-anchor.Tpo -c -o trust-anchor.obj `if test -f 'anchor.c'; then $(CYGPATH_W) 'anchor.c'; else $(CYGPATH_W) '$(srcdir)/anchor.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/trust-anchor.Tpo $(DEPDIR)/trust-anchor.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='anchor.c' object='trust-anchor.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -c -o trust-anchor.obj `if test -f 'anchor.c'; then $(CYGPATH_W) 'anchor.c'; else $(CYGPATH_W) '$(srcdir)/anchor.c'; fi`
+
+trust-parser.o: parser.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -MT trust-parser.o -MD -MP -MF $(DEPDIR)/trust-parser.Tpo -c -o trust-parser.o `test -f 'parser.c' || echo '$(srcdir)/'`parser.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/trust-parser.Tpo $(DEPDIR)/trust-parser.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='parser.c' object='trust-parser.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -c -o trust-parser.o `test -f 'parser.c' || echo '$(srcdir)/'`parser.c
+
+trust-parser.obj: parser.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -MT trust-parser.obj -MD -MP -MF $(DEPDIR)/trust-parser.Tpo -c -o trust-parser.obj `if test -f 'parser.c'; then $(CYGPATH_W) 'parser.c'; else $(CYGPATH_W) '$(srcdir)/parser.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/trust-parser.Tpo $(DEPDIR)/trust-parser.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='parser.c' object='trust-parser.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -c -o trust-parser.obj `if test -f 'parser.c'; then $(CYGPATH_W) 'parser.c'; else $(CYGPATH_W) '$(srcdir)/parser.c'; fi`
+
+trust-persist.o: persist.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -MT trust-persist.o -MD -MP -MF $(DEPDIR)/trust-persist.Tpo -c -o trust-persist.o `test -f 'persist.c' || echo '$(srcdir)/'`persist.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/trust-persist.Tpo $(DEPDIR)/trust-persist.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='persist.c' object='trust-persist.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -c -o trust-persist.o `test -f 'persist.c' || echo '$(srcdir)/'`persist.c
+
+trust-persist.obj: persist.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -MT trust-persist.obj -MD -MP -MF $(DEPDIR)/trust-persist.Tpo -c -o trust-persist.obj `if test -f 'persist.c'; then $(CYGPATH_W) 'persist.c'; else $(CYGPATH_W) '$(srcdir)/persist.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/trust-persist.Tpo $(DEPDIR)/trust-persist.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='persist.c' object='trust-persist.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -c -o trust-persist.obj `if test -f 'persist.c'; then $(CYGPATH_W) 'persist.c'; else $(CYGPATH_W) '$(srcdir)/persist.c'; fi`
+
+trust-digest.o: digest.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -MT trust-digest.o -MD -MP -MF $(DEPDIR)/trust-digest.Tpo -c -o trust-digest.o `test -f 'digest.c' || echo '$(srcdir)/'`digest.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/trust-digest.Tpo $(DEPDIR)/trust-digest.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='digest.c' object='trust-digest.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -c -o trust-digest.o `test -f 'digest.c' || echo '$(srcdir)/'`digest.c
+
+trust-digest.obj: digest.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -MT trust-digest.obj -MD -MP -MF $(DEPDIR)/trust-digest.Tpo -c -o trust-digest.obj `if test -f 'digest.c'; then $(CYGPATH_W) 'digest.c'; else $(CYGPATH_W) '$(srcdir)/digest.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/trust-digest.Tpo $(DEPDIR)/trust-digest.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='digest.c' object='trust-digest.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -c -o trust-digest.obj `if test -f 'digest.c'; then $(CYGPATH_W) 'digest.c'; else $(CYGPATH_W) '$(srcdir)/digest.c'; fi`
+
+trust-enumerate.o: enumerate.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -MT trust-enumerate.o -MD -MP -MF $(DEPDIR)/trust-enumerate.Tpo -c -o trust-enumerate.o `test -f 'enumerate.c' || echo '$(srcdir)/'`enumerate.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/trust-enumerate.Tpo $(DEPDIR)/trust-enumerate.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='enumerate.c' object='trust-enumerate.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -c -o trust-enumerate.o `test -f 'enumerate.c' || echo '$(srcdir)/'`enumerate.c
+
+trust-enumerate.obj: enumerate.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -MT trust-enumerate.obj -MD -MP -MF $(DEPDIR)/trust-enumerate.Tpo -c -o trust-enumerate.obj `if test -f 'enumerate.c'; then $(CYGPATH_W) 'enumerate.c'; else $(CYGPATH_W) '$(srcdir)/enumerate.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/trust-enumerate.Tpo $(DEPDIR)/trust-enumerate.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='enumerate.c' object='trust-enumerate.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -c -o trust-enumerate.obj `if test -f 'enumerate.c'; then $(CYGPATH_W) 'enumerate.c'; else $(CYGPATH_W) '$(srcdir)/enumerate.c'; fi`
+
+trust-extract.o: extract.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -MT trust-extract.o -MD -MP -MF $(DEPDIR)/trust-extract.Tpo -c -o trust-extract.o `test -f 'extract.c' || echo '$(srcdir)/'`extract.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/trust-extract.Tpo $(DEPDIR)/trust-extract.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='extract.c' object='trust-extract.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -c -o trust-extract.o `test -f 'extract.c' || echo '$(srcdir)/'`extract.c
+
+trust-extract.obj: extract.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -MT trust-extract.obj -MD -MP -MF $(DEPDIR)/trust-extract.Tpo -c -o trust-extract.obj `if test -f 'extract.c'; then $(CYGPATH_W) 'extract.c'; else $(CYGPATH_W) '$(srcdir)/extract.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/trust-extract.Tpo $(DEPDIR)/trust-extract.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='extract.c' object='trust-extract.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -c -o trust-extract.obj `if test -f 'extract.c'; then $(CYGPATH_W) 'extract.c'; else $(CYGPATH_W) '$(srcdir)/extract.c'; fi`
+
+trust-extract-jks.o: extract-jks.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -MT trust-extract-jks.o -MD -MP -MF $(DEPDIR)/trust-extract-jks.Tpo -c -o trust-extract-jks.o `test -f 'extract-jks.c' || echo '$(srcdir)/'`extract-jks.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/trust-extract-jks.Tpo $(DEPDIR)/trust-extract-jks.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='extract-jks.c' object='trust-extract-jks.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -c -o trust-extract-jks.o `test -f 'extract-jks.c' || echo '$(srcdir)/'`extract-jks.c
+
+trust-extract-jks.obj: extract-jks.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -MT trust-extract-jks.obj -MD -MP -MF $(DEPDIR)/trust-extract-jks.Tpo -c -o trust-extract-jks.obj `if test -f 'extract-jks.c'; then $(CYGPATH_W) 'extract-jks.c'; else $(CYGPATH_W) '$(srcdir)/extract-jks.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/trust-extract-jks.Tpo $(DEPDIR)/trust-extract-jks.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='extract-jks.c' object='trust-extract-jks.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -c -o trust-extract-jks.obj `if test -f 'extract-jks.c'; then $(CYGPATH_W) 'extract-jks.c'; else $(CYGPATH_W) '$(srcdir)/extract-jks.c'; fi`
+
+trust-extract-openssl.o: extract-openssl.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -MT trust-extract-openssl.o -MD -MP -MF $(DEPDIR)/trust-extract-openssl.Tpo -c -o trust-extract-openssl.o `test -f 'extract-openssl.c' || echo '$(srcdir)/'`extract-openssl.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/trust-extract-openssl.Tpo $(DEPDIR)/trust-extract-openssl.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='extract-openssl.c' object='trust-extract-openssl.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -c -o trust-extract-openssl.o `test -f 'extract-openssl.c' || echo '$(srcdir)/'`extract-openssl.c
+
+trust-extract-openssl.obj: extract-openssl.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -MT trust-extract-openssl.obj -MD -MP -MF $(DEPDIR)/trust-extract-openssl.Tpo -c -o trust-extract-openssl.obj `if test -f 'extract-openssl.c'; then $(CYGPATH_W) 'extract-openssl.c'; else $(CYGPATH_W) '$(srcdir)/extract-openssl.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/trust-extract-openssl.Tpo $(DEPDIR)/trust-extract-openssl.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='extract-openssl.c' object='trust-extract-openssl.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -c -o trust-extract-openssl.obj `if test -f 'extract-openssl.c'; then $(CYGPATH_W) 'extract-openssl.c'; else $(CYGPATH_W) '$(srcdir)/extract-openssl.c'; fi`
+
+trust-extract-pem.o: extract-pem.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -MT trust-extract-pem.o -MD -MP -MF $(DEPDIR)/trust-extract-pem.Tpo -c -o trust-extract-pem.o `test -f 'extract-pem.c' || echo '$(srcdir)/'`extract-pem.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/trust-extract-pem.Tpo $(DEPDIR)/trust-extract-pem.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='extract-pem.c' object='trust-extract-pem.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -c -o trust-extract-pem.o `test -f 'extract-pem.c' || echo '$(srcdir)/'`extract-pem.c
+
+trust-extract-pem.obj: extract-pem.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -MT trust-extract-pem.obj -MD -MP -MF $(DEPDIR)/trust-extract-pem.Tpo -c -o trust-extract-pem.obj `if test -f 'extract-pem.c'; then $(CYGPATH_W) 'extract-pem.c'; else $(CYGPATH_W) '$(srcdir)/extract-pem.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/trust-extract-pem.Tpo $(DEPDIR)/trust-extract-pem.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='extract-pem.c' object='trust-extract-pem.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -c -o trust-extract-pem.obj `if test -f 'extract-pem.c'; then $(CYGPATH_W) 'extract-pem.c'; else $(CYGPATH_W) '$(srcdir)/extract-pem.c'; fi`
+
+trust-extract-cer.o: extract-cer.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -MT trust-extract-cer.o -MD -MP -MF $(DEPDIR)/trust-extract-cer.Tpo -c -o trust-extract-cer.o `test -f 'extract-cer.c' || echo '$(srcdir)/'`extract-cer.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/trust-extract-cer.Tpo $(DEPDIR)/trust-extract-cer.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='extract-cer.c' object='trust-extract-cer.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -c -o trust-extract-cer.o `test -f 'extract-cer.c' || echo '$(srcdir)/'`extract-cer.c
+
+trust-extract-cer.obj: extract-cer.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -MT trust-extract-cer.obj -MD -MP -MF $(DEPDIR)/trust-extract-cer.Tpo -c -o trust-extract-cer.obj `if test -f 'extract-cer.c'; then $(CYGPATH_W) 'extract-cer.c'; else $(CYGPATH_W) '$(srcdir)/extract-cer.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/trust-extract-cer.Tpo $(DEPDIR)/trust-extract-cer.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='extract-cer.c' object='trust-extract-cer.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -c -o trust-extract-cer.obj `if test -f 'extract-cer.c'; then $(CYGPATH_W) 'extract-cer.c'; else $(CYGPATH_W) '$(srcdir)/extract-cer.c'; fi`
+
+trust-list.o: list.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -MT trust-list.o -MD -MP -MF $(DEPDIR)/trust-list.Tpo -c -o trust-list.o `test -f 'list.c' || echo '$(srcdir)/'`list.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/trust-list.Tpo $(DEPDIR)/trust-list.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='list.c' object='trust-list.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -c -o trust-list.o `test -f 'list.c' || echo '$(srcdir)/'`list.c
+
+trust-list.obj: list.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -MT trust-list.obj -MD -MP -MF $(DEPDIR)/trust-list.Tpo -c -o trust-list.obj `if test -f 'list.c'; then $(CYGPATH_W) 'list.c'; else $(CYGPATH_W) '$(srcdir)/list.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/trust-list.Tpo $(DEPDIR)/trust-list.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='list.c' object='trust-list.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -c -o trust-list.obj `if test -f 'list.c'; then $(CYGPATH_W) 'list.c'; else $(CYGPATH_W) '$(srcdir)/list.c'; fi`
+
+trust-save.o: save.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -MT trust-save.o -MD -MP -MF $(DEPDIR)/trust-save.Tpo -c -o trust-save.o `test -f 'save.c' || echo '$(srcdir)/'`save.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/trust-save.Tpo $(DEPDIR)/trust-save.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='save.c' object='trust-save.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -c -o trust-save.o `test -f 'save.c' || echo '$(srcdir)/'`save.c
+
+trust-save.obj: save.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -MT trust-save.obj -MD -MP -MF $(DEPDIR)/trust-save.Tpo -c -o trust-save.obj `if test -f 'save.c'; then $(CYGPATH_W) 'save.c'; else $(CYGPATH_W) '$(srcdir)/save.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/trust-save.Tpo $(DEPDIR)/trust-save.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='save.c' object='trust-save.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -c -o trust-save.obj `if test -f 'save.c'; then $(CYGPATH_W) 'save.c'; else $(CYGPATH_W) '$(srcdir)/save.c'; fi`
+
+trust-trust.o: trust.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -MT trust-trust.o -MD -MP -MF $(DEPDIR)/trust-trust.Tpo -c -o trust-trust.o `test -f 'trust.c' || echo '$(srcdir)/'`trust.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/trust-trust.Tpo $(DEPDIR)/trust-trust.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='trust.c' object='trust-trust.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -c -o trust-trust.o `test -f 'trust.c' || echo '$(srcdir)/'`trust.c
+
+trust-trust.obj: trust.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -MT trust-trust.obj -MD -MP -MF $(DEPDIR)/trust-trust.Tpo -c -o trust-trust.obj `if test -f 'trust.c'; then $(CYGPATH_W) 'trust.c'; else $(CYGPATH_W) '$(srcdir)/trust.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/trust-trust.Tpo $(DEPDIR)/trust-trust.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='trust.c' object='trust-trust.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(trust_CFLAGS) $(CFLAGS) -c -o trust-trust.obj `if test -f 'trust.c'; then $(CYGPATH_W) 'trust.c'; else $(CYGPATH_W) '$(srcdir)/trust.c'; fi`
 
 mostlyclean-libtool:
 	-rm -f *.lo
@@ -840,10 +1239,10 @@ distdir: $(DISTFILES)
 	done
 check-am: all-am
 check: check-recursive
-all-am: Makefile $(LTLIBRARIES) $(DATA)
+all-am: Makefile $(LTLIBRARIES) $(PROGRAMS) $(SCRIPTS) $(DATA)
 installdirs: installdirs-recursive
 installdirs-am:
-	for dir in "$(DESTDIR)$(moduledir)" "$(DESTDIR)$(configdir)"; do \
+	for dir in "$(DESTDIR)$(moduledir)" "$(DESTDIR)$(bindir)" "$(DESTDIR)$(externaldir)" "$(DESTDIR)$(configdir)"; do \
 	  test -z "$$dir" || $(MKDIR_P) "$$dir"; \
 	done
 install: install-recursive
@@ -878,8 +1277,8 @@ maintainer-clean-generic:
 	@echo "it deletes files that may require special tools to rebuild."
 clean: clean-recursive
 
-clean-am: clean-generic clean-libtool clean-moduleLTLIBRARIES \
-	clean-noinstLTLIBRARIES mostlyclean-am
+clean-am: clean-binPROGRAMS clean-generic clean-libtool \
+	clean-moduleLTLIBRARIES clean-noinstLTLIBRARIES mostlyclean-am
 
 distclean: distclean-recursive
 	-rm -rf ./$(DEPDIR)
@@ -899,13 +1298,14 @@ info: info-recursive
 
 info-am:
 
-install-data-am: install-configDATA install-moduleLTLIBRARIES
+install-data-am: install-configDATA install-externalSCRIPTS \
+	install-moduleLTLIBRARIES
 
 install-dvi: install-dvi-recursive
 
 install-dvi-am:
 
-install-exec-am:
+install-exec-am: install-binPROGRAMS
 
 install-html: install-html-recursive
 
@@ -945,25 +1345,28 @@ ps: ps-recursive
 
 ps-am:
 
-uninstall-am: uninstall-configDATA uninstall-moduleLTLIBRARIES
+uninstall-am: uninstall-binPROGRAMS uninstall-configDATA \
+	uninstall-externalSCRIPTS uninstall-moduleLTLIBRARIES
 
 .MAKE: $(am__recursive_targets) install-am install-strip
 
 .PHONY: $(am__recursive_targets) CTAGS GTAGS TAGS all all-am check \
-	check-am clean clean-generic clean-libtool \
+	check-am clean clean-binPROGRAMS clean-generic clean-libtool \
 	clean-moduleLTLIBRARIES clean-noinstLTLIBRARIES cscopelist-am \
 	ctags ctags-am distclean distclean-compile distclean-generic \
 	distclean-libtool distclean-tags distdir dvi dvi-am html \
-	html-am info info-am install install-am install-configDATA \
-	install-data install-data-am install-dvi install-dvi-am \
-	install-exec install-exec-am install-html install-html-am \
+	html-am info info-am install install-am install-binPROGRAMS \
+	install-configDATA install-data install-data-am install-dvi \
+	install-dvi-am install-exec install-exec-am \
+	install-externalSCRIPTS install-html install-html-am \
 	install-info install-info-am install-man \
 	install-moduleLTLIBRARIES install-pdf install-pdf-am \
 	install-ps install-ps-am install-strip installcheck \
 	installcheck-am installdirs installdirs-am maintainer-clean \
 	maintainer-clean-generic mostlyclean mostlyclean-compile \
 	mostlyclean-generic mostlyclean-libtool pdf pdf-am ps ps-am \
-	tags tags-am uninstall uninstall-am uninstall-configDATA \
+	tags tags-am uninstall uninstall-am uninstall-binPROGRAMS \
+	uninstall-configDATA uninstall-externalSCRIPTS \
 	uninstall-moduleLTLIBRARIES
 
 
@@ -981,6 +1384,11 @@ hellcheck:
 	@for dir in $(SUBDIRS); do \
 		test "$$dir" = "." || $(MAKE) -C $$dir hellcheck; \
 	done
+
+asn:
+	asn1Parser -o pkix.asn.h pkix.asn
+	asn1Parser -o openssl.asn.h openssl.asn
+	asn1Parser -o basic.asn.h basic.asn
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

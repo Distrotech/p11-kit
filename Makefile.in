@@ -77,11 +77,21 @@ PRE_UNINSTALL = :
 POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
-DIST_COMMON = $(top_srcdir)/build/Makefile.decl INSTALL NEWS README \
-	AUTHORS ChangeLog $(srcdir)/Makefile.in $(srcdir)/Makefile.am \
-	$(top_srcdir)/configure $(am__configure_deps) \
-	$(srcdir)/config.h.in ABOUT-NLS COPYING compile config.guess \
-	config.rpath config.sub depcomp install-sh missing ltmain.sh
+DIST_COMMON = $(top_srcdir)/build/Makefile.decl $(srcdir)/Makefile.in \
+	$(srcdir)/Makefile.am $(top_srcdir)/configure \
+	$(am__configure_deps) $(srcdir)/config.h.in ABOUT-NLS AUTHORS \
+	COPYING ChangeLog INSTALL NEWS README compile \
+	build/aux/compile config.guess build/aux/config.guess \
+	config.rpath build/aux/config.rpath config.sub \
+	build/aux/config.sub depcomp install-sh build/aux/install-sh \
+	missing build/aux/missing ltmain.sh build/aux/ltmain.sh \
+	$(top_srcdir)/build/aux/compile \
+	$(top_srcdir)/build/aux/config.guess \
+	$(top_srcdir)/build/aux/config.rpath \
+	$(top_srcdir)/build/aux/config.sub \
+	$(top_srcdir)/build/aux/install-sh \
+	$(top_srcdir)/build/aux/ltmain.sh \
+	$(top_srcdir)/build/aux/missing
 subdir = .
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/build/m4/gettext.m4 \
@@ -160,7 +170,7 @@ am__define_uniq_tagged_files = \
 ETAGS = etags
 CTAGS = ctags
 CSCOPE = cscope
-DIST_SUBDIRS = build common p11-kit trust tools doc po
+DIST_SUBDIRS = build common p11-kit trust doc po
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
 distdir = $(PACKAGE)-$(VERSION)
 top_distdir = $(distdir)
@@ -238,6 +248,7 @@ GTKDOC_CHECK = @GTKDOC_CHECK@
 GTKDOC_MKPDF = @GTKDOC_MKPDF@
 GTKDOC_REBASE = @GTKDOC_REBASE@
 GTKDOC_SCAN = @GTKDOC_SCAN@
+HASH_LIBS = @HASH_LIBS@
 HTML_DIR = @HTML_DIR@
 INSTALL = @INSTALL@
 INSTALL_DATA = @INSTALL_DATA@
@@ -373,7 +384,6 @@ SUBDIRS = \
 	common \
 	p11-kit \
 	$(TRUST_DIR) \
-	tools \
 	doc \
 	po
 
@@ -396,15 +406,15 @@ $(srcdir)/Makefile.in: @MAINTAINER_MODE_TRUE@ $(srcdir)/Makefile.am $(top_srcdir
 	@for dep in $?; do \
 	  case '$(am__configure_deps)' in \
 	    *$$dep*) \
-	      echo ' cd $(srcdir) && $(AUTOMAKE) --gnu'; \
-	      $(am__cd) $(srcdir) && $(AUTOMAKE) --gnu \
+	      echo ' cd $(srcdir) && $(AUTOMAKE) --foreign'; \
+	      $(am__cd) $(srcdir) && $(AUTOMAKE) --foreign \
 		&& exit 0; \
 	      exit 1;; \
 	  esac; \
 	done; \
-	echo ' cd $(top_srcdir) && $(AUTOMAKE) --gnu Makefile'; \
+	echo ' cd $(top_srcdir) && $(AUTOMAKE) --foreign Makefile'; \
 	$(am__cd) $(top_srcdir) && \
-	  $(AUTOMAKE) --gnu Makefile
+	  $(AUTOMAKE) --foreign Makefile
 .PRECIOUS: Makefile
 Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
 	@case '$?' in \
