@@ -83,9 +83,9 @@ DIST_COMMON = $(top_srcdir)/build/Makefile.decl $(srcdir)/Makefile.in \
 	COPYING ChangeLog INSTALL NEWS README compile \
 	build/aux/compile config.guess build/aux/config.guess \
 	config.rpath build/aux/config.rpath config.sub \
-	build/aux/config.sub depcomp install-sh build/aux/install-sh \
-	missing build/aux/missing ltmain.sh build/aux/ltmain.sh \
-	$(top_srcdir)/build/aux/compile \
+	build/aux/config.sub depcomp build/aux/depcomp install-sh \
+	build/aux/install-sh missing build/aux/missing ltmain.sh \
+	build/aux/ltmain.sh $(top_srcdir)/build/aux/compile \
 	$(top_srcdir)/build/aux/config.guess \
 	$(top_srcdir)/build/aux/config.rpath \
 	$(top_srcdir)/build/aux/config.sub \
