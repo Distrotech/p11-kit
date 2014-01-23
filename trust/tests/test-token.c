@@ -238,12 +238,13 @@ test_not_writable (void)
 {
 	p11_token *token;
 
+#ifndef __MINGW32__
 	if (getuid () != 0) {
 		token = p11_token_new (333, "/", "Label");
 		assert (!p11_token_is_writable (token));
 		p11_token_free (token);
 	}
-
+#endif
 	token = p11_token_new (333, "", "Label");
 	assert (!p11_token_is_writable (token));
 	p11_token_free (token);
