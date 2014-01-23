@@ -170,7 +170,7 @@ am__define_uniq_tagged_files = \
 ETAGS = etags
 CTAGS = ctags
 CSCOPE = cscope
-DIST_SUBDIRS = build common p11-kit trust doc po
+DIST_SUBDIRS = common p11-kit trust doc po
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
 distdir = $(PACKAGE)-$(VERSION)
 top_distdir = $(distdir)
@@ -380,7 +380,6 @@ WEBBASE = /srv/p11-glue.freedesktop.org/www
 @WITH_TRUST_MODULE_FALSE@TRUST_DIR = 
 @WITH_TRUST_MODULE_TRUE@TRUST_DIR = trust
 SUBDIRS = \
-	build \
 	common \
 	p11-kit \
 	$(TRUST_DIR) \
@@ -390,10 +389,13 @@ SUBDIRS = \
 ACLOCAL_AMFLAGS = -I build/m4
 DISTCHECK_CONFIGURE_FLAGS = \
 	--enable-doc \
-	--disable-coverage
+	--disable-coverage \
+	--enable-strict \
+	CFLAGS='-O2'
 
 EXTRA_DIST = \
-	config.rpath \
+	build/Makefile.tests \
+	build/Makefile.decl \
 	HACKING
 
 all: config.h

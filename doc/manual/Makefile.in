@@ -83,7 +83,7 @@ PRE_UNINSTALL = :
 POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
-DIST_COMMON = $(top_srcdir)/gtk-doc.make $(srcdir)/Makefile.in \
+DIST_COMMON = $(top_srcdir)/build/gtk-doc.make $(srcdir)/Makefile.in \
 	$(srcdir)/Makefile.am
 subdir = doc/manual
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
@@ -390,6 +390,12 @@ IGNORE_HFILES = \
 # Images to copy into HTML directory.
 # e.g. HTML_IMAGES=$(top_srcdir)/gtk/stock-icons/stock_about_24.png
 HTML_IMAGES = 
+generate_files = \
+	version.xml \
+	userdir.xml \
+	sysdir.xml \
+	$(NULL)
+
 
 # Extra SGML files that are included by $(DOC_MAIN_SGML_FILE).
 # e.g. content_files=running.sgml building.sgml changes-2.0.sgml
@@ -407,12 +413,7 @@ content_files = p11-kit-config.xml p11-kit-sharing.xml \
 # SGML files where gtk-doc abbrevations (#GtkWidget) are expanded
 # These files must be listed here *and* in content_files
 # e.g. expand_content_files=running.sgml
-expand_content_files = \
-	version.xml \
-	userdir.xml \
-	sysdir.xml \
-	$(NULL)
-
+expand_content_files = $(generate_files)
 
 # CFLAGS and LDFLAGS for compiling gtkdoc-scangobj with your library.
 # Only needed if you are using gtkdoc-scangobj to dynamically query widget
@@ -482,7 +483,8 @@ CLEANFILES = $(SCANOBJ_FILES) $(REPORT_FILES) $(DOC_STAMPS) \
 @ENABLE_GTK_DOC_TRUE@        --stringparam man.copyright.section.enabled 0
 
 @ENABLE_GTK_DOC_TRUE@XSLTPROC_MAN = \
-@ENABLE_GTK_DOC_TRUE@	$(XSLTPROC) $(XSLTPROC_FLAGS) http://docbook.sourceforge.net/release/xsl/current/manpages/docbook.xsl
+@ENABLE_GTK_DOC_TRUE@	$(XSLTPROC) $(XSLTPROC_FLAGS) --path $(builddir) \
+@ENABLE_GTK_DOC_TRUE@	http://docbook.sourceforge.net/release/xsl/current/manpages/docbook.xsl
 
 MAN_IN_FILES = \
 	$(man8_MANS:.8=.xml) \
@@ -493,8 +495,7 @@ MAN_IN_FILES = \
 all: all-am
 
 .SUFFIXES:
-.SUFFIXES: .1 .5 .8 .xml
-$(srcdir)/Makefile.in: @MAINTAINER_MODE_TRUE@ $(srcdir)/Makefile.am $(top_srcdir)/gtk-doc.make $(am__configure_deps)
+$(srcdir)/Makefile.in: @MAINTAINER_MODE_TRUE@ $(srcdir)/Makefile.am $(top_srcdir)/build/gtk-doc.make $(am__configure_deps)
 	@for dep in $?; do \
 	  case '$(am__configure_deps)' in \
 	    *$$dep*) \
@@ -515,7 +516,7 @@ Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
 	    echo ' cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@ $(am__depfiles_maybe)'; \
 	    cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@ $(am__depfiles_maybe);; \
 	esac;
-$(top_srcdir)/gtk-doc.make:
+$(top_srcdir)/build/gtk-doc.make:
 
 $(top_builddir)/config.status: $(top_srcdir)/configure $(CONFIG_STATUS_DEPENDENCIES)
 	cd $(top_builddir) && $(MAKE) $(AM_MAKEFLAGS) am--refresh
@@ -827,11 +828,11 @@ p11-kit-overrides.txt: $(srcdir)/p11-kit-overrides.txt
 
 # Generate our files with variables
 sysdir.xml:
-	echo -n $(p11_system_config) > "$@"
+	$(AM_V_GEN) echo -n $(p11_system_config) > "$@"
 userdir.xml:
-	echo -n $(p11_user_config) > "$@"
+	$(AM_V_GEN) echo -n $(p11_user_config) > "$@"
 version.xml:
-	echo -n $(VERSION) > "$@"
+	$(AM_V_GEN) echo -n $(VERSION) > "$@"
 
 @ENABLE_GTK_DOC_TRUE@all-local: $(HTML_BUILD_STAMP) $(PDF_BUILD_STAMP)
 @ENABLE_GTK_DOC_FALSE@all-local:
@@ -1021,11 +1022,11 @@ dist-hook: dist-check-gtkdoc dist-hook-local
 
 .PHONY : dist-hook-local docs
 
-@ENABLE_GTK_DOC_TRUE@.xml.1:
+@ENABLE_GTK_DOC_TRUE@trust.1: trust.xml $(generate_files)
 @ENABLE_GTK_DOC_TRUE@	$(AM_V_GEN) $(XSLTPROC_MAN) $<
-@ENABLE_GTK_DOC_TRUE@.xml.5:
+@ENABLE_GTK_DOC_TRUE@pkcs11.conf.5: pkcs11.conf.xml $(generate_files)
 @ENABLE_GTK_DOC_TRUE@	$(AM_V_GEN) $(XSLTPROC_MAN) $<
-@ENABLE_GTK_DOC_TRUE@.xml.8:
+@ENABLE_GTK_DOC_TRUE@p11-kit.8: p11-kit.xml $(generate_files)
 @ENABLE_GTK_DOC_TRUE@	$(AM_V_GEN) $(XSLTPROC_MAN) $<
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
