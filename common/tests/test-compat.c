@@ -165,6 +165,22 @@ test_getauxval (CuTest *tc)
 	free (path);
 }
 
+static void
+test_mmap (CuTest *tc)
+{
+	p11_mmap *map;
+	void *data;
+	size_t size;
+	char file[] = "emptyfileXXXXXX";
+	int fd = mkstemp (file);
+	close (fd);
+	/* mmap on empty file should work */
+	map = p11_mmap_open (file, &data, &size);
+	unlink (file);
+	CuAssertPtrNotNull (tc, map);
+	p11_mmap_close (map);
+}
+
 #endif /* OS_UNIX */
 
 int
@@ -180,6 +196,7 @@ main (void)
 	if (!getenv ("FAKED_MODE")) {
 		SUITE_ADD_TEST (suite, test_getauxval);
 	}
+	SUITE_ADD_TEST (suite, test_mmap);
 #endif
 
 	CuSuiteRun (suite);
